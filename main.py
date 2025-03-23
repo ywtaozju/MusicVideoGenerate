@@ -613,6 +613,9 @@ class MusicVideoGenerator:
                     if artist:
                         display_name = f"{artist} - {title}"
                     
+                    # 确保display_name不包含文件扩展名
+                    display_name = os.path.splitext(display_name)[0]
+                    
                     # 检查歌词文件
                     has_lyrics = False
                     lyrics_path = None
@@ -1211,6 +1214,10 @@ class MusicVideoGenerator:
                 name_x = x_start + 160
                 # 如果歌曲名称过长，进行裁剪
                 display_name = info['display_name']
+                
+                # 确保歌曲名称不包含文件扩展名
+                display_name = os.path.splitext(display_name)[0]
+                
                 max_width = panel_width - 180  # 留出序号和时间的空间
                 
                 if draw.textlength(display_name, font=title_font) > max_width:
