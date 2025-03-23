@@ -1,0 +1,10 @@
+name: music-video-gen
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pip=21.0
+  - tk
+  - pip:
+    - pillow>=9.0.0 
