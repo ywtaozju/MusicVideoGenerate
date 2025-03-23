@@ -289,8 +289,23 @@ class MusicVideoGenerator:
         self.status_label.pack(side=tk.LEFT, padx=10, pady=5)
         
         # 添加耗时显示标签
-        self.time_label = tk.Label(status_time_frame, text="耗时: 00:00:00", bg="#f0f0f0")
-        self.time_label.pack(side=tk.RIGHT, padx=10, pady=5)
+        time_frame = tk.Frame(status_time_frame, bg="#f0f0f0")
+        time_frame.pack(side=tk.RIGHT)
+        
+        # 当前视频耗时标签
+        self.current_time_label = tk.Label(time_frame, text="当前耗时: 00:00:00", bg="#f0f0f0")
+        self.current_time_label.pack(side=tk.TOP, padx=10, pady=2, anchor=tk.E)
+        
+        # 总耗时标签
+        self.total_time_label = tk.Label(time_frame, text="总耗时: 00:00:00", bg="#f0f0f0")
+        self.total_time_label.pack(side=tk.BOTTOM, padx=10, pady=2, anchor=tk.E)
+        
+        # 添加导出进度显示标签
+        export_progress_frame = tk.Frame(progress_frame, bg="#f0f0f0")
+        export_progress_frame.pack(fill=tk.X, padx=10)
+        
+        self.export_progress_label = tk.Label(export_progress_frame, text="", bg="#f0f0f0")
+        self.export_progress_label.pack(side=tk.LEFT, padx=10, pady=5)
         
         # 生成按钮
         self.generate_btn = tk.Button(self.content_frame, text="生成视频", command=self.start_generation, bg="#4CAF50", fg="white", font=("Arial", 12, "bold"))
@@ -523,6 +538,17 @@ class MusicVideoGenerator:
         self.total_video_count = count
         self.original_filename = self.output_filename.get()
         
+        # 初始化总耗时
+        self.total_process_time = 0
+        self.total_start_time = time.time()  # 记录总处理开始时间
+        
+        # 更新导出进度显示
+        self.root.after(0, lambda idx=0, tot=count: self.export_progress_label.configure(
+            text=f"导出进度: {idx}/{tot} 视频完成"))
+        
+        # 更新总耗时显示
+        self.root.after(0, lambda: self.total_time_label.configure(text=f"总耗时: 00:00:00"))
+        
         # 开始第一个视频生成
         self.generate_next_video()
     
@@ -537,8 +563,10 @@ class MusicVideoGenerator:
                 self.output_filename.set(self.original_filename)
                 # 恢复生成按钮状态
                 self.root.after(0, lambda: self.generate_btn.config(text="生成视频", state=tk.NORMAL, bg="#4CAF50"))
-                # 更新状态
+                # 更新状态和导出进度
                 self.root.after(0, lambda: self.status_label.configure(text=f"已完成所有 {self.total_video_count} 个视频生成"))
+                self.root.after(0, lambda tot=self.total_video_count: self.export_progress_label.configure(
+                    text=f"导出进度: {tot}/{tot} 视频完成"))
                 return
             
             # 设置文件名
@@ -561,7 +589,7 @@ class MusicVideoGenerator:
                 self.root.after(0, lambda: self.status_label.configure(text=f"正在生成第 1/{self.total_video_count} 个视频 (原始顺序)..."))
             
             # 开始生成当前视频
-            threading.Thread(target=lambda: self.generate_combined_video(self.generate_next_video), daemon=True).start()
+            threading.Thread(target=lambda: self.generate_combined_video(self.on_video_complete), daemon=True).start()
             
             # 增加索引，准备下一个视频
             self.current_video_index += 1
@@ -579,6 +607,14 @@ class MusicVideoGenerator:
             self.music_files = self.original_music_files.copy()
             self.output_filename.set(self.original_filename)
     
+    def on_video_complete(self):
+        """视频完成后的回调"""
+        # 更新导出进度显示
+        self.root.after(0, lambda idx=self.current_video_index, tot=self.total_video_count: self.export_progress_label.configure(
+            text=f"导出进度: {idx}/{tot} 视频完成"))
+        # 继续生成下一个视频
+        self.generate_next_video()
+    
     def start_progress_monitor(self):
         """启动进度监控线程，定期检查队列中的进度更新并应用到UI"""
         def update_progress():
@@ -588,12 +624,18 @@ class MusicVideoGenerator:
                     time.sleep(0.1)
                     continue
                 
-                # 更新耗时显示
+                # 更新当前视频耗时显示
                 if self.timer_running:
                     current_time = time.time()
                     self.elapsed_time = current_time - self.start_time
                     elapsed_str = self.format_elapsed_time(self.elapsed_time)
-                    self.root.after(0, lambda t=elapsed_str: self.time_label.configure(text=f"耗时: {t}"))
+                    self.root.after(0, lambda t=elapsed_str: self.current_time_label.configure(text=f"当前耗时: {t}"))
+                    
+                    # 更新总耗时显示（如果在批量处理模式下）
+                    if hasattr(self, 'total_start_time'):
+                        total_elapsed = current_time - self.total_start_time
+                        total_elapsed_str = self.format_elapsed_time(total_elapsed)
+                        self.root.after(0, lambda t=total_elapsed_str: self.total_time_label.configure(text=f"总耗时: {t}"))
                 
                 try:
                     # 非阻塞方式获取队列中的进度更新
@@ -1063,11 +1105,19 @@ class MusicVideoGenerator:
             self.processing = False
             self.timer_running = False
             
-            # 计算最终耗时并更新显示
+            # 计算当前视频的耗时
             if self.start_time > 0:
-                final_time = time.time() - self.start_time
-                elapsed_str = self.format_elapsed_time(final_time)
-                self.root.after(0, lambda t=elapsed_str: self.time_label.configure(text=f"总耗时: {t}"))
+                video_time = time.time() - self.start_time
+                video_time_str = self.format_elapsed_time(video_time)
+                
+                # 更新当前视频耗时显示
+                self.root.after(0, lambda t=video_time_str: self.current_time_label.configure(text=f"当前耗时: {t}"))
+                
+                # 如果在批量处理模式下，更新总耗时
+                if hasattr(self, 'total_start_time'):
+                    total_elapsed = time.time() - self.total_start_time
+                    total_elapsed_str = self.format_elapsed_time(total_elapsed)
+                    self.root.after(0, lambda t=total_elapsed_str: self.total_time_label.configure(text=f"总耗时: {t}"))
             
             # 如果是单独生成视频模式，恢复生成按钮状态
             if callback is None:
