@@ -521,6 +521,46 @@ class MusicVideoGenerator:
             messagebox.showwarning("警告", "导出数量必须大于0！")
             return
         
+        # 检查是否有足够的歌曲进行排列组合
+        import math
+        # 计算歌曲的可能排列数
+        num_songs = len(self.music_files)
+        factorial = math.factorial(num_songs)
+        
+        # 对于两首歌曲的特殊处理
+        if num_songs == 2 and export_count > factorial:
+            response = messagebox.askyesno("确认", 
+                           f"您只有2首歌曲，最多只能生成2个不同顺序的视频。\n\n"
+                           f"是否继续并生成{factorial}个视频？")
+            if response:
+                export_count = factorial
+                # 更新导出数量显示
+                self.export_count.set(factorial)
+            else:
+                return
+        # 对于一般情况的处理
+        elif num_songs >= 3 and export_count > factorial:
+            response = messagebox.askyesno("确认", 
+                           f"导出数量({export_count})超过了可能的歌曲排列组合数量({factorial})，"
+                           f"无法保证所有视频顺序不重复。\n\n是否继续并生成{factorial}个视频？")
+            if response:
+                export_count = factorial
+                # 更新导出数量显示
+                self.export_count.set(factorial)
+            else:
+                return
+        # 对于只有1首歌曲的情况
+        elif num_songs == 1 and export_count > 1:
+            response = messagebox.askyesno("确认", 
+                           "您只有1首歌曲，无法生成多个不同顺序的视频。\n\n"
+                           "是否继续并只生成1个视频？")
+            if response:
+                export_count = 1
+                # 更新导出数量显示
+                self.export_count.set(1)
+            else:
+                return
+        
         # 禁用生成按钮，并更改文本
         self.generate_btn.config(text="正在生成中...", state=tk.DISABLED, bg="#cccccc")
         
@@ -542,6 +582,17 @@ class MusicVideoGenerator:
         self.total_process_time = 0
         self.total_start_time = time.time()  # 记录总处理开始时间
         
+        # 跟踪已生成的歌曲顺序，防止重复
+        self.generated_orders = []
+        # 保存原始顺序的哈希值
+        self.generated_orders.append(self.get_order_hash(self.original_music_files))
+        
+        # 如果只有两首歌曲，并且需要生成第二个视频，提前计算出颠倒顺序
+        if len(self.original_music_files) == 2 and count > 1:
+            # 创建反序列表，用于第二个视频
+            self.reversed_music_files = self.original_music_files.copy()
+            self.reversed_music_files.reverse()
+        
         # 更新导出进度显示
         self.root.after(0, lambda idx=0, tot=count: self.export_progress_label.configure(
             text=f"导出进度: {idx}/{tot} 视频完成"))
@@ -551,6 +602,13 @@ class MusicVideoGenerator:
         
         # 开始第一个视频生成
         self.generate_next_video()
+    
+    def get_order_hash(self, file_list):
+        """获取歌曲顺序的哈希值，用于检查重复"""
+        # 使用文件路径作为唯一标识
+        order_str = "".join(file_list)
+        import hashlib
+        return hashlib.md5(order_str.encode()).hexdigest()
     
     def generate_next_video(self):
         """生成下一个视频"""
@@ -574,14 +632,51 @@ class MusicVideoGenerator:
                 new_filename = f"{self.original_filename}_{self.current_video_index + 1}"
                 self.output_filename.set(new_filename)
             
-            # 随机打乱（除第一个视频外）
+            # 处理不同的歌曲排序
             if self.current_video_index > 0:
-                import random
-                self.music_files = self.original_music_files.copy()
-                random.shuffle(self.music_files)
-                # 更新状态
-                self.root.after(0, lambda idx=self.current_video_index+1, total=self.total_video_count: 
-                            self.status_label.configure(text=f"正在生成第 {idx}/{total} 个视频 (随机顺序)..."))
+                # 只有两首歌曲的特殊情况处理
+                if len(self.original_music_files) == 2:
+                    # 直接使用提前准备好的反序列表
+                    self.music_files = self.reversed_music_files.copy()
+                    # 更新状态
+                    self.root.after(0, lambda idx=self.current_video_index+1, total=self.total_video_count: 
+                                self.status_label.configure(text=f"正在生成第 {idx}/{total} 个视频 (反序顺序)..."))
+                # 三首及以上歌曲的随机排序处理
+                else:
+                    import random
+                    max_attempts = 100  # 最大尝试次数，防止无限循环
+                    attempts = 0
+                    
+                    while attempts < max_attempts:
+                        # 复制原始列表并打乱
+                        self.music_files = self.original_music_files.copy()
+                        random.shuffle(self.music_files)
+                        
+                        # 检查是否生成了新的顺序
+                        current_hash = self.get_order_hash(self.music_files)
+                        if current_hash not in self.generated_orders:
+                            # 找到新顺序，保存并跳出循环
+                            self.generated_orders.append(current_hash)
+                            break
+                        
+                        attempts += 1
+                    
+                    # 更新状态，提示是否找到了不重复的顺序
+                    if attempts < max_attempts:
+                        self.root.after(0, lambda idx=self.current_video_index+1, total=self.total_video_count: 
+                                    self.status_label.configure(text=f"正在生成第 {idx}/{total} 个视频 (随机顺序)..."))
+                    else:
+                        # 无法找到不重复的顺序，提示用户并停止生成
+                        error_msg = "无法生成更多不重复的歌曲顺序，已停止处理"
+                        print(error_msg)
+                        self.root.after(0, lambda: self.status_label.configure(text=f"发生错误: {error_msg}"))
+                        self.root.after(0, lambda: messagebox.showerror("错误", error_msg))
+                        
+                        # 恢复原始设置和按钮状态
+                        self.music_files = self.original_music_files.copy()
+                        self.output_filename.set(self.original_filename)
+                        self.root.after(0, lambda: self.generate_btn.config(text="生成视频", state=tk.NORMAL, bg="#4CAF50"))
+                        return
             else:
                 # 第一次使用原始顺序
                 self.music_files = self.original_music_files.copy()
