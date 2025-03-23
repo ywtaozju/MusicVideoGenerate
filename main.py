@@ -52,6 +52,11 @@ class MusicVideoGenerator:
         self.merge_mode = True  # 新增：合并模式标志
         self.use_gpu = False    # 是否使用GPU加速
         
+        # 添加用于跟踪处理时间的变量
+        self.start_time = 0
+        self.elapsed_time = 0
+        self.timer_running = False
+        
         # 检查FFmpeg是否安装
         if not check_ffmpeg():
             messagebox.showerror("错误", "未检测到FFmpeg。请安装FFmpeg并确保其在系统PATH中。")
@@ -277,14 +282,22 @@ class MusicVideoGenerator:
         progress_frame.pack(fill=tk.X, padx=10, pady=10)
         
         self.progress = ttk.Progressbar(progress_frame, orient=tk.HORIZONTAL, length=100, mode='determinate')
-        self.progress.pack(fill=tk.X, padx=10, pady=10)
+        self.progress.pack(fill=tk.X, padx=10, pady=5)
         
-        self.status_label = tk.Label(progress_frame, text="就绪", bg="#f0f0f0")
-        self.status_label.pack(padx=10, pady=5)
+        # 添加一个状态和耗时信息的框架
+        status_time_frame = tk.Frame(progress_frame, bg="#f0f0f0")
+        status_time_frame.pack(fill=tk.X, padx=10)
+        
+        self.status_label = tk.Label(status_time_frame, text="就绪", bg="#f0f0f0")
+        self.status_label.pack(side=tk.LEFT, padx=10, pady=5)
+        
+        # 添加耗时显示标签
+        self.time_label = tk.Label(status_time_frame, text="耗时: 00:00:00", bg="#f0f0f0")
+        self.time_label.pack(side=tk.RIGHT, padx=10, pady=5)
         
         # 生成按钮
-        generate_btn = tk.Button(self.content_frame, text="生成合并视频", command=self.start_generation, bg="#E91E63", fg="white", font=("Arial", 12, "bold"), height=2)
-        generate_btn.pack(fill=tk.X, padx=10, pady=20)
+        self.generate_btn = tk.Button(self.content_frame, text="生成视频", command=self.start_generation, bg="#4CAF50", fg="white", font=("Arial", 12, "bold"))
+        self.generate_btn.pack(fill=tk.X, padx=10, pady=20)
     
     def on_content_configure(self, event):
         """当内容框架大小变化时调整滚动区域"""
@@ -477,25 +490,23 @@ class MusicVideoGenerator:
             self.output_label.config(text=directory)
     
     def start_generation(self):
-        # 检查必要的输入
+        """开始生成视频"""
         if not self.music_files:
-            messagebox.showerror("错误", "请至少添加一首音乐文件")
+            messagebox.showwarning("警告", "请先添加音乐文件！")
             return
         
         if not self.image_file:
-            messagebox.showerror("错误", "请选择一个封面图片")
+            messagebox.showwarning("警告", "请先选择一张封面图片！")
             return
         
         if not self.output_dir:
-            messagebox.showerror("错误", "请选择输出目录")
+            messagebox.showwarning("警告", "请先选择输出目录！")
             return
         
-        if not self.output_filename.get().strip():
-            messagebox.showerror("错误", "请输入输出文件名")
-            return
-            
-        # 显示进度条
-        self.progress['value'] = 0
+        # 禁用生成按钮，并更改文本
+        self.generate_btn.config(text="正在生成中...", state=tk.DISABLED, bg="#cccccc")
+        
+        # 更新状态
         self.status_label.config(text="正在生成视频...")
         
         # 开始生成视频（使用线程防止界面冻结）
@@ -509,6 +520,13 @@ class MusicVideoGenerator:
                     # 如果没有正在处理，则休眠一会再检查
                     time.sleep(0.1)
                     continue
+                
+                # 更新耗时显示
+                if self.timer_running:
+                    current_time = time.time()
+                    self.elapsed_time = current_time - self.start_time
+                    elapsed_str = self.format_elapsed_time(self.elapsed_time)
+                    self.root.after(0, lambda t=elapsed_str: self.time_label.configure(text=f"耗时: {t}"))
                 
                 try:
                     # 非阻塞方式获取队列中的进度更新
@@ -588,6 +606,10 @@ class MusicVideoGenerator:
         try:
             # 标记处理开始
             self.processing = True
+            
+            # 开始计时
+            self.start_time = time.time()
+            self.timer_running = True
             
             # 设置进度条最大值为1（0-100%）
             self.root.after(0, lambda: self.progress.configure(maximum=1.0))
@@ -972,6 +994,16 @@ class MusicVideoGenerator:
         finally:
             # 标记处理结束
             self.processing = False
+            self.timer_running = False
+            
+            # 计算最终耗时并更新显示
+            if self.start_time > 0:
+                final_time = time.time() - self.start_time
+                elapsed_str = self.format_elapsed_time(final_time)
+                self.root.after(0, lambda t=elapsed_str: self.time_label.configure(text=f"总耗时: {t}"))
+            
+            # 恢复生成按钮状态
+            self.root.after(0, lambda: self.generate_btn.config(text="生成视频", state=tk.NORMAL, bg="#4CAF50"))
     
     def extract_audio_info(self, audio_file):
         """提取音频文件的元数据"""
@@ -2202,6 +2234,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         except Exception as e:
             print(f"创建简单ASS文件时出错: {str(e)}")
             return False
+
+    def format_elapsed_time(self, seconds):
+        """格式化已用时间为 HH:MM:SS 格式"""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        seconds = int(seconds % 60)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 if __name__ == "__main__":
     root = tk.Tk()
