@@ -33,6 +33,9 @@ except ImportError:
     EYED3_AVAILABLE = False
     print("警告: eyed3库未安装，某些MP3标签功能将受限")
 
+import queue
+import time
+
 class MusicVideoGenerator:
     def __init__(self, root):
         self.root = root
@@ -61,6 +64,13 @@ class MusicVideoGenerator:
         self.create_default_lyrics_folder()
         
         self.setup_ui()
+        
+        # 添加进度更新队列
+        self.progress_queue = queue.Queue()
+        # 添加进度更新标志
+        self.processing = False
+        # 开始进度更新线程
+        self.start_progress_monitor()
     
     def create_default_lyrics_folder(self):
         """创建默认的歌词文件夹"""
@@ -440,12 +450,97 @@ class MusicVideoGenerator:
         # 开始生成视频（使用线程防止界面冻结）
         threading.Thread(target=self.generate_combined_video, daemon=True).start()
     
+    def start_progress_monitor(self):
+        """启动进度监控线程，定期检查队列中的进度更新并应用到UI"""
+        def update_progress():
+            while True:
+                if not self.processing:
+                    # 如果没有正在处理，则休眠一会再检查
+                    time.sleep(0.1)
+                    continue
+                
+                try:
+                    # 非阻塞方式获取队列中的进度更新
+                    progress_info = self.progress_queue.get_nowait()
+                    stage = progress_info.get('stage', '')
+                    progress = progress_info.get('progress', 0)
+                    message = progress_info.get('message', '')
+                    
+                    # 根据处理阶段和进度更新UI
+                    if stage == 'audio':
+                        # 音频合并阶段 (0-33%)
+                        value = progress * 0.33
+                        self.root.after(0, lambda v=value: self.progress.configure(value=v))
+                    elif stage == 'video':
+                        # 视频生成阶段 (33-100%)
+                        value = 0.33 + progress * 0.67
+                        self.root.after(0, lambda v=value: self.progress.configure(value=v))
+                    
+                    # 更新状态消息
+                    if message:
+                        self.root.after(0, lambda m=message: self.status_label.configure(text=m))
+                        
+                    self.progress_queue.task_done()
+                except queue.Empty:
+                    # 队列为空，稍等再检查
+                    time.sleep(0.1)
+        
+        # 创建并启动进度监控线程
+        progress_thread = threading.Thread(target=update_progress, daemon=True)
+        progress_thread.start()
+    
+    def parse_ffmpeg_progress(self, line, duration):
+        """解析FFmpeg输出行，提取进度信息"""
+        # 寻找时间信息
+        time_match = re.search(r"time=(\d+):(\d+):(\d+)\.(\d+)", line)
+        if time_match:
+            hours, minutes, seconds, msec = map(int, time_match.groups())
+            current_time = hours * 3600 + minutes * 60 + seconds + msec / 100
+            # 计算百分比进度 (0-1范围)
+            return min(current_time / duration, 1.0) if duration else 0
+        return None
+
+    def run_ffmpeg_with_progress(self, command, stage, total_duration, message_prefix):
+        """运行FFmpeg命令并报告进度"""
+        try:
+            # 使用subprocess.Popen来获取实时输出
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True,
+                bufsize=1,
+                text=True
+            )
+            
+            # 读取错误输出（FFmpeg将进度信息输出到stderr）
+            for line in process.stderr:
+                # 解析进度
+                progress = self.parse_ffmpeg_progress(line, total_duration)
+                if progress is not None:
+                    # 将进度信息放入队列
+                    percentage = int(progress * 100)
+                    self.progress_queue.put({
+                        'stage': stage,
+                        'progress': progress,
+                        'message': f"{message_prefix} ({percentage}%)"
+                    })
+            
+            # 等待进程完成
+            process.wait()
+            return process.returncode
+        except Exception as e:
+            print(f"FFmpeg执行错误: {str(e)}")
+            return -1
+    
     def generate_combined_video(self):
         try:
-            total_steps = 4  # 增加一步：预处理+处理+字幕处理+后处理
-            # 使用root.after确保在UI线程中更新界面
-            self.root.after(0, lambda: self.progress.configure(maximum=total_steps))
-            self.root.after(0, lambda: self.progress.configure(value=0))
+            # 标记处理开始
+            self.processing = True
+            
+            # 设置进度条最大值为1（0-100%）
+            self.root.after(0, lambda: self.progress.configure(maximum=1.0))
+            self.root.after(0, lambda: self.progress.configure(value=0.0))
             
             # 创建临时工作目录
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -455,9 +550,12 @@ class MusicVideoGenerator:
                 # 1. 分析所有音频文件，获取时长信息
                 music_info = []
                 current_time = 0
+                total_duration = 0
+                
                 for music_file in self.music_files:
                     # 提取音频元数据
                     title, artist, duration = self.extract_audio_info(music_file)
+                    total_duration += duration
                     
                     # 使用更好的显示名称（标题+艺术家）
                     display_name = title
@@ -528,9 +626,12 @@ class MusicVideoGenerator:
                     
                     current_time = end_time
                 
-                # 使用root.after确保在UI线程中更新界面
-                self.root.after(0, lambda: self.progress.configure(value=1))
-                self.root.after(0, lambda: self.status_label.configure(text="步骤2/4: 生成带歌单的视频..."))
+                # 更新进度队列，表示分析完成
+                self.progress_queue.put({
+                    'stage': 'audio',
+                    'progress': 0.1,
+                    'message': "步骤2/4: 生成带歌单的视频..."
+                })
                 
                 # 2. 生成包含歌单的背景图
                 img_with_playlist = os.path.join(temp_dir, "background_with_playlist.png")
@@ -539,6 +640,13 @@ class MusicVideoGenerator:
                 # 确保输出目录存在
                 output_file = os.path.join(self.output_dir, f"{self.output_filename.get()}.mp4")
                 os.makedirs(os.path.dirname(output_file), exist_ok=True)
+                
+                # 更新进度队列，表示准备合并音频
+                self.progress_queue.put({
+                    'stage': 'audio',
+                    'progress': 0.2,
+                    'message': "步骤2/4: 准备合并音频文件..."
+                })
                 
                 # 创建合并音频的列表文件
                 audio_list_file = os.path.join(temp_dir, "audio_list.txt")
@@ -555,9 +663,7 @@ class MusicVideoGenerator:
                 
                 # 合并音频
                 try:
-                    # 使用root.after确保在UI线程中更新界面
-                    self.root.after(0, lambda: self.status_label.configure(text="步骤2/4: 合并音频文件..."))
-                    
+                    # 运行音频合并命令
                     audio_command = [
                         'ffmpeg',
                         '-f', 'concat',
@@ -571,37 +677,47 @@ class MusicVideoGenerator:
                     
                     print(f"执行合并音频命令: {' '.join(audio_command)}")
                     
-                    process = subprocess.Popen(
-                        audio_command,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE
+                    # 运行音频合并并监控进度
+                    audio_result = self.run_ffmpeg_with_progress(
+                        audio_command, 
+                        'audio', 
+                        total_duration, 
+                        "步骤2/4: 合并音频文件"
                     )
                     
-                    _, stderr = process.communicate()
-                    
-                    if process.returncode != 0:
-                        print(f"合并音频错误: {stderr.decode('utf-8', errors='ignore')}")
+                    if audio_result != 0:
                         raise Exception("合并音频文件失败")
+                    
+                    # 更新进度，表示音频合并完成
+                    self.progress_queue.put({
+                        'stage': 'audio',
+                        'progress': 1.0,
+                        'message': "步骤3/4: 处理歌词字幕..."
+                    })
                     
                     # 3. 如果有歌词，将LRC文件转换为字幕文件
                     subtitle_file = None
                     if self.show_lyrics_var.get() and any(info['has_lyrics'] for info in music_info):
-                        self.root.after(0, lambda: self.progress.configure(value=2))
-                        self.root.after(0, lambda: self.status_label.configure(text="步骤3/4: 处理歌词字幕..."))
-                        
                         # 将字幕文件保存到固定位置，避免路径问题
                         subtitle_file = os.path.join(temp_dir, "lyrics.srt")
                         self.convert_lrc_to_subtitle(music_info, subtitle_file)
                     else:
-                        self.root.after(0, lambda: self.progress.configure(value=2))
-                        self.root.after(0, lambda: self.status_label.configure(text="步骤3/4: 跳过字幕处理(无歌词)..."))
+                        self.progress_queue.put({
+                            'stage': 'video',
+                            'progress': 0.0,
+                            'message': "步骤3/4: 跳过字幕处理(无歌词)..."
+                        })
                     
                     # 4. 创建视频
-                    # 使用root.after确保在UI线程中更新界面
-                    self.root.after(0, lambda: self.status_label.configure(text="步骤4/4: 生成最终视频..."))
+                    self.progress_queue.put({
+                        'stage': 'video',
+                        'progress': 0.1,
+                        'message': "步骤4/4: 生成最终视频..."
+                    })
                     
                     # 确保输出路径正确处理
                     safe_output_file = output_file.replace('\\', '/')
+                    video_creation_success = False
                     
                     # 如果有字幕，使用两步法：先创建带字幕的临时视频
                     if subtitle_file and os.path.exists(subtitle_file) and os.name == 'nt':
@@ -633,17 +749,16 @@ class MusicVideoGenerator:
                             
                             print(f"执行创建带字幕的临时视频命令: {' '.join(sub_command)}")
                             
-                            process = subprocess.Popen(
-                                sub_command,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE
+                            # 运行带字幕的视频生成并监控进度
+                            video_result = self.run_ffmpeg_with_progress(
+                                sub_command, 
+                                'video', 
+                                total_duration, 
+                                "步骤4/4: 生成带字幕的临时视频"
                             )
                             
-                            _, stderr = process.communicate()
-                            
-                            if process.returncode != 0:
-                                print(f"创建带字幕的临时视频错误: {stderr.decode('utf-8', errors='ignore')}")
-                                # 如果临时视频失败，继续使用无字幕视频
+                            if video_result != 0:
+                                print(f"创建带字幕的临时视频错误")
                                 temp_video_with_sub = None
                         finally:
                             # 恢复工作目录
@@ -651,6 +766,12 @@ class MusicVideoGenerator:
                             
                         # 步骤2：复制临时视频到最终位置
                         if temp_video_with_sub and os.path.exists(temp_video_with_sub):
+                            self.progress_queue.put({
+                                'stage': 'video',
+                                'progress': 0.9,
+                                'message': "步骤4/4: 完成视频处理..."
+                            })
+                            
                             # 直接复制视频文件
                             copy_command = [
                                 'ffmpeg',
@@ -674,63 +795,63 @@ class MusicVideoGenerator:
                                 print(f"复制最终视频错误: {stderr.decode('utf-8', errors='ignore')}")
                                 raise Exception("生成视频失败")
                             
-                            # 使用root.after确保在UI线程中更新界面
-                            self.root.after(0, lambda: self.progress.configure(value=4))
-                            self.root.after(0, lambda: self.status_label.configure(text=f"完成! 已生成合并视频"))
-                            
-                            # 弹出成功消息
-                            completed_msg = f"已成功生成合并视频!\n保存位置: {output_file}"
-                            self.root.after(0, lambda: messagebox.showinfo("成功", completed_msg))
-                            
-                            # 如果复制成功，直接返回
-                            return
+                            video_creation_success = True
                     
-                    # 创建标准视频（无字幕或非Windows系统）
-                    video_command = [
-                        'ffmpeg',
-                        '-loop', '1',
-                        '-i', img_with_playlist,
-                        '-i', temp_audio,
-                        '-c:v', 'h264_nvenc' if self.gpu_acceleration_var.get() and self.use_gpu else 'libx264',
-                        '-preset', 'p7' if self.gpu_acceleration_var.get() and self.use_gpu else 'medium',
-                        '-crf', '23',
-                        '-c:a', 'aac',
-                        '-b:a', '192k',
-                        '-pix_fmt', 'yuv420p',
-                        '-shortest',
-                        '-y'
-                    ]
+                    # 如果前面的步骤没有成功，尝试标准视频生成
+                    if not video_creation_success:
+                        # 创建标准视频（无字幕或非Windows系统）
+                        video_command = [
+                            'ffmpeg',
+                            '-loop', '1',
+                            '-i', img_with_playlist,
+                            '-i', temp_audio,
+                            '-c:v', 'h264_nvenc' if self.gpu_acceleration_var.get() and self.use_gpu else 'libx264',
+                            '-preset', 'p7' if self.gpu_acceleration_var.get() and self.use_gpu else 'medium',
+                            '-crf', '23',
+                            '-c:a', 'aac',
+                            '-b:a', '192k',
+                            '-pix_fmt', 'yuv420p',
+                            '-shortest',
+                            '-y'
+                        ]
+                        
+                        # 如果是非Windows系统且有字幕文件，添加字幕滤镜
+                        if subtitle_file and os.path.exists(subtitle_file) and os.name != 'nt':
+                            video_command.extend([
+                                '-vf', f"subtitles='{subtitle_file}'"
+                            ])
+                        
+                        # 添加输出文件
+                        video_command.append(safe_output_file)
+                        
+                        print(f"执行创建视频命令: {' '.join(video_command)}")
+                        
+                        # 使用进度监控运行视频生成命令
+                        video_result = self.run_ffmpeg_with_progress(
+                            video_command, 
+                            'video', 
+                            total_duration, 
+                            "步骤4/4: 生成最终视频"
+                        )
+                        
+                        if video_result != 0:
+                            raise Exception("生成视频失败")
                     
-                    # 如果是非Windows系统且有字幕文件，添加字幕滤镜
-                    if subtitle_file and os.path.exists(subtitle_file) and os.name != 'nt':
-                        video_command.extend([
-                            '-vf', f"subtitles='{subtitle_file}'"
-                        ])
-                    
-                    # 添加输出文件
-                    video_command.append(safe_output_file)
-                    
-                    print(f"执行创建视频命令: {' '.join(video_command)}")
-                    
-                    process = subprocess.Popen(
-                        video_command,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE
-                    )
-                    
-                    _, stderr = process.communicate()
-                    
-                    if process.returncode != 0:
-                        print(f"生成视频错误: {stderr.decode('utf-8', errors='ignore')}")
-                        raise Exception("生成视频失败")
+                    # 最终完成处理
+                    self.progress_queue.put({
+                        'stage': 'video',
+                        'progress': 1.0,
+                        'message': "完成! 已生成合并视频"
+                    })
                     
                     # 使用root.after确保在UI线程中更新界面
-                    self.root.after(0, lambda: self.progress.configure(value=4))
+                    self.root.after(0, lambda: self.progress.configure(value=1.0))
                     self.root.after(0, lambda: self.status_label.configure(text=f"完成! 已生成合并视频"))
                     
                     # 弹出成功消息
                     completed_msg = f"已成功生成合并视频!\n保存位置: {output_file}"
-                    self.root.after(0, lambda: messagebox.showinfo("成功", completed_msg))
+                    # 使用单独的after调用来确保弹窗显示，给予足够的时间让UI更新
+                    self.root.after(100, lambda msg=completed_msg: messagebox.showinfo("成功", msg))
                 
                 except Exception as e:
                     error_msg = str(e)
@@ -745,6 +866,9 @@ class MusicVideoGenerator:
             # 使用root.after确保在UI线程中更新界面
             self.root.after(0, lambda: self.status_label.configure(text=f"发生错误: {error_msg}"))
             self.root.after(0, lambda: messagebox.showerror("错误", f"生成视频时出错: {error_msg}"))
+        finally:
+            # 标记处理结束
+            self.processing = False
     
     def extract_audio_info(self, audio_file):
         """从音频文件提取元数据和时长"""
