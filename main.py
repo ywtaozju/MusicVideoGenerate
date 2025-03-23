@@ -48,8 +48,8 @@ class MusicVideoGenerator:
         self.music_item_frames = []  # 初始化音乐项目框架列表
         self.image_file = ""
         self.output_dir = ""
-        self.lyrics_folder = ""  # 新增：歌词文件夹路径
-        self.merge_mode = True  # 新增：合并模式标志
+        self.lyrics_folder = ""  # 歌词文件夹路径
+        self.merge_mode = True  # 合并模式标志
         self.use_gpu = False    # 是否使用GPU加速
         
         # 添加用于跟踪处理时间的变量
@@ -66,7 +66,7 @@ class MusicVideoGenerator:
         # 检查是否支持GPU加速
         self.check_gpu_support()
         
-        # 尝试创建歌词文件夹
+        # 创建默认歌词文件夹
         self.create_default_lyrics_folder()
         
         self.setup_ui()
@@ -90,19 +90,6 @@ class MusicVideoGenerator:
             print(f"歌词文件夹设置为: {self.lyrics_folder}")
         except Exception as e:
             print(f"创建默认歌词文件夹时出错: {str(e)}")
-    
-    def set_lyrics_folder(self):
-        """设置歌词文件夹"""
-        try:
-            folder = filedialog.askdirectory(title="选择歌词文件夹")
-            if folder:
-                self.lyrics_folder = folder
-                messagebox.showinfo("成功", f"歌词文件夹已设置为: {folder}")
-                
-                # 更新音乐列表UI以反映新的歌词状态
-                self.update_music_list_ui()
-        except Exception as e:
-            messagebox.showerror("错误", f"设置歌词文件夹时出错: {str(e)}")
     
     def check_gpu_support(self):
         """检查系统是否支持GPU加速（NVIDIA NVENC）"""
@@ -214,16 +201,12 @@ class MusicVideoGenerator:
         btn_row2.pack(fill=tk.X)
         
         # 检查歌词按钮
-        check_lyrics_btn = tk.Button(btn_row2, text="检查歌词", command=self.check_selected_lyrics, bg="#FF9800", fg="white", font=("Arial", 10), width=15)
+        check_lyrics_btn = tk.Button(btn_row2, text="检查歌词", command=self.check_selected_lyrics, bg="#FF9800", fg="white", font=("Arial", 10), width=20)
         check_lyrics_btn.pack(side=tk.LEFT, padx=2)
         
         # 添加歌词按钮
-        add_lyrics_btn = tk.Button(btn_row2, text="添加歌词", command=self.add_lyrics_to_selected, bg="#9C27B0", fg="white", font=("Arial", 10), width=15)
+        add_lyrics_btn = tk.Button(btn_row2, text="添加歌词", command=self.add_lyrics_to_selected, bg="#9C27B0", fg="white", font=("Arial", 10), width=20)
         add_lyrics_btn.pack(side=tk.LEFT, padx=2)
-        
-        # 配置歌词文件夹按钮
-        lyrics_folder_btn = tk.Button(btn_row2, text="设置歌词文件夹", command=self.set_lyrics_folder, bg="#607D8B", fg="white", font=("Arial", 10), width=15)
-        lyrics_folder_btn.pack(side=tk.LEFT, padx=2)
         
         # 选择封面图片
         image_frame = tk.LabelFrame(self.content_frame, text="选择封面图片", bg="#f0f0f0", font=("Arial", 12))
