@@ -40,7 +40,8 @@ class MusicVideoGenerator:
     def __init__(self, root):
         self.root = root
         self.root.title("歌单视频生成器")
-        self.root.geometry("800x600")
+        self.root.geometry("850x650")
+        self.root.minsize(800, 600)  # 设置最小窗口大小
         self.root.configure(bg="#f0f0f0")
         
         self.music_files = []
@@ -129,12 +130,34 @@ class MusicVideoGenerator:
             self.use_gpu = False
     
     def setup_ui(self):
-        # 创建主框架
+        # 创建主框架，使用滚动条确保所有内容都可以访问
         main_frame = tk.Frame(self.root, bg="#f0f0f0")
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # 创建带滚动条的画布
+        self.main_canvas = tk.Canvas(main_frame, bd=0, highlightthickness=0)
+        main_scrollbar = tk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.main_canvas.yview)
+        
+        # 配置画布
+        self.main_canvas.configure(yscrollcommand=main_scrollbar.set)
+        
+        # 放置画布和滚动条
+        main_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.main_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # 创建内容框架
+        self.content_frame = tk.Frame(self.main_canvas, bg="#f0f0f0")
+        self.main_canvas_window = self.main_canvas.create_window((0, 0), window=self.content_frame, anchor="nw")
+        
+        # 绑定调整大小事件
+        self.content_frame.bind("<Configure>", self.on_content_configure)
+        self.main_canvas.bind("<Configure>", self.on_main_canvas_configure)
+        
+        # 绑定鼠标滚轮事件
+        self.main_canvas.bind_all("<MouseWheel>", self.on_mousewheel)
         
         # 选择音乐文件
-        music_frame = tk.LabelFrame(main_frame, text="选择音乐文件", bg="#f0f0f0", font=("Arial", 12))
+        music_frame = tk.LabelFrame(self.content_frame, text="选择音乐文件", bg="#f0f0f0", font=("Arial", 12))
         music_frame.pack(fill=tk.X, padx=10, pady=10)
         
         # 创建一个带颜色标签的Frame来代替Listbox
@@ -164,33 +187,41 @@ class MusicVideoGenerator:
         music_btn_frame = tk.Frame(music_frame, bg="#f0f0f0")
         music_btn_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
         
-        add_music_btn = tk.Button(music_btn_frame, text="添加音乐", command=self.add_music, bg="#4CAF50", fg="white", font=("Arial", 10), width=15)
-        add_music_btn.pack(side=tk.LEFT, padx=5)
+        # 创建按钮行1
+        btn_row1 = tk.Frame(music_btn_frame, bg="#f0f0f0")
+        btn_row1.pack(fill=tk.X, pady=(0, 5))
         
-        remove_music_btn = tk.Button(music_btn_frame, text="移除选中音乐", command=self.remove_music, bg="#f44336", fg="white", font=("Arial", 10), width=15)
-        remove_music_btn.pack(side=tk.LEFT, padx=5)
+        add_music_btn = tk.Button(btn_row1, text="添加音乐", command=self.add_music, bg="#4CAF50", fg="white", font=("Arial", 10), width=15)
+        add_music_btn.pack(side=tk.LEFT, padx=2)
         
-        # 检查歌词按钮
-        check_lyrics_btn = tk.Button(music_btn_frame, text="检查歌词", command=self.check_selected_lyrics, bg="#FF9800", fg="white", font=("Arial", 10), width=15)
-        check_lyrics_btn.pack(side=tk.LEFT, padx=5)
-        
-        # 添加歌词按钮
-        add_lyrics_btn = tk.Button(music_btn_frame, text="添加歌词", command=self.add_lyrics_to_selected, bg="#9C27B0", fg="white", font=("Arial", 10), width=15)
-        add_lyrics_btn.pack(side=tk.LEFT, padx=5)
-        
-        # 配置歌词文件夹按钮
-        lyrics_folder_btn = tk.Button(music_btn_frame, text="设置歌词文件夹", command=self.set_lyrics_folder, bg="#607D8B", fg="white", font=("Arial", 10), width=15)
-        lyrics_folder_btn.pack(side=tk.LEFT, padx=5)
+        remove_music_btn = tk.Button(btn_row1, text="移除选中音乐", command=self.remove_music, bg="#f44336", fg="white", font=("Arial", 10), width=15)
+        remove_music_btn.pack(side=tk.LEFT, padx=2)
         
         # 上下移动按钮
-        move_up_btn = tk.Button(music_btn_frame, text="上移", command=self.move_up, bg="#2196F3", fg="white", font=("Arial", 10), width=8)
-        move_up_btn.pack(side=tk.LEFT, padx=5)
+        move_up_btn = tk.Button(btn_row1, text="上移", command=self.move_up, bg="#2196F3", fg="white", font=("Arial", 10), width=8)
+        move_up_btn.pack(side=tk.LEFT, padx=2)
         
-        move_down_btn = tk.Button(music_btn_frame, text="下移", command=self.move_down, bg="#2196F3", fg="white", font=("Arial", 10), width=8)
-        move_down_btn.pack(side=tk.LEFT, padx=5)
+        move_down_btn = tk.Button(btn_row1, text="下移", command=self.move_down, bg="#2196F3", fg="white", font=("Arial", 10), width=8)
+        move_down_btn.pack(side=tk.LEFT, padx=2)
+        
+        # 创建按钮行2
+        btn_row2 = tk.Frame(music_btn_frame, bg="#f0f0f0")
+        btn_row2.pack(fill=tk.X)
+        
+        # 检查歌词按钮
+        check_lyrics_btn = tk.Button(btn_row2, text="检查歌词", command=self.check_selected_lyrics, bg="#FF9800", fg="white", font=("Arial", 10), width=15)
+        check_lyrics_btn.pack(side=tk.LEFT, padx=2)
+        
+        # 添加歌词按钮
+        add_lyrics_btn = tk.Button(btn_row2, text="添加歌词", command=self.add_lyrics_to_selected, bg="#9C27B0", fg="white", font=("Arial", 10), width=15)
+        add_lyrics_btn.pack(side=tk.LEFT, padx=2)
+        
+        # 配置歌词文件夹按钮
+        lyrics_folder_btn = tk.Button(btn_row2, text="设置歌词文件夹", command=self.set_lyrics_folder, bg="#607D8B", fg="white", font=("Arial", 10), width=15)
+        lyrics_folder_btn.pack(side=tk.LEFT, padx=2)
         
         # 选择封面图片
-        image_frame = tk.LabelFrame(main_frame, text="选择封面图片", bg="#f0f0f0", font=("Arial", 12))
+        image_frame = tk.LabelFrame(self.content_frame, text="选择封面图片", bg="#f0f0f0", font=("Arial", 12))
         image_frame.pack(fill=tk.X, padx=10, pady=10)
         
         self.image_label = tk.Label(image_frame, text="未选择图片", bg="#f0f0f0", width=70, height=5)
@@ -200,7 +231,7 @@ class MusicVideoGenerator:
         select_image_btn.pack(side=tk.RIGHT, padx=10, pady=10)
         
         # 选择输出目录和文件名
-        output_frame = tk.LabelFrame(main_frame, text="选择输出位置", bg="#f0f0f0", font=("Arial", 12))
+        output_frame = tk.LabelFrame(self.content_frame, text="选择输出位置", bg="#f0f0f0", font=("Arial", 12))
         output_frame.pack(fill=tk.X, padx=10, pady=10)
         
         self.output_label = tk.Label(output_frame, text="未选择输出目录", bg="#f0f0f0")
@@ -222,7 +253,7 @@ class MusicVideoGenerator:
         tk.Label(file_name_frame, text=".mp4", bg="#f0f0f0").pack(side=tk.LEFT)
         
         # 选项设置
-        options_frame = tk.LabelFrame(main_frame, text="设置选项", bg="#f0f0f0", font=("Arial", 12))
+        options_frame = tk.LabelFrame(self.content_frame, text="设置选项", bg="#f0f0f0", font=("Arial", 12))
         options_frame.pack(fill=tk.X, padx=10, pady=10)
         
         # 显示歌词选项
@@ -242,7 +273,7 @@ class MusicVideoGenerator:
             gpu_check.config(state=tk.DISABLED)
             
         # 进度条
-        progress_frame = tk.Frame(main_frame, bg="#f0f0f0")
+        progress_frame = tk.Frame(self.content_frame, bg="#f0f0f0")
         progress_frame.pack(fill=tk.X, padx=10, pady=10)
         
         self.progress = ttk.Progressbar(progress_frame, orient=tk.HORIZONTAL, length=100, mode='determinate')
@@ -252,8 +283,21 @@ class MusicVideoGenerator:
         self.status_label.pack(padx=10, pady=5)
         
         # 生成按钮
-        generate_btn = tk.Button(main_frame, text="生成合并视频", command=self.start_generation, bg="#E91E63", fg="white", font=("Arial", 12, "bold"), height=2)
+        generate_btn = tk.Button(self.content_frame, text="生成合并视频", command=self.start_generation, bg="#E91E63", fg="white", font=("Arial", 12, "bold"), height=2)
         generate_btn.pack(fill=tk.X, padx=10, pady=20)
+    
+    def on_content_configure(self, event):
+        """当内容框架大小变化时调整滚动区域"""
+        self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all"))
+    
+    def on_main_canvas_configure(self, event):
+        """当主画布大小变化时调整内容框架宽度"""
+        # 更新内容框架的宽度以匹配画布宽度
+        self.main_canvas.itemconfig(self.main_canvas_window, width=event.width)
+    
+    def on_mousewheel(self, event):
+        """鼠标滚轮事件处理"""
+        self.main_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
     
     def on_frame_configure(self, event):
         """当音乐列表框架大小变化时调整Canvas的滚动区域"""
@@ -266,7 +310,14 @@ class MusicVideoGenerator:
     def add_music(self):
         files = filedialog.askopenfilenames(
             title="选择音乐文件",
-            filetypes=(("音频文件", "*.mp3 *.wav *.flac"), ("所有文件", "*.*"))
+            filetypes=[("音频文件", "*.mp3 *.flac *.wav *.m4a *.aac *.wma"), 
+                      ("MP3文件", "*.mp3"),
+                      ("FLAC文件", "*.flac"),
+                      ("WAV文件", "*.wav"),
+                      ("M4A文件", "*.m4a"),
+                      ("AAC文件", "*.aac"),
+                      ("WMA文件", "*.wma"),
+                      ("所有文件", "*.*")]
         )
         if files:
             for file in files:
@@ -648,6 +699,55 @@ class MusicVideoGenerator:
                     'message': "步骤2/4: 准备合并音频文件..."
                 })
                 
+                # 根据音频类型进行处理
+                # 首先将所有非MP3格式转换为MP3格式
+                converted_files = []
+                for i, info in enumerate(music_info):
+                    source_file = info['file']
+                    file_ext = os.path.splitext(source_file)[1].lower()
+                    
+                    # 如果文件不是MP3格式，需要先转换
+                    if file_ext != '.mp3':
+                        print(f"转换音频文件: {os.path.basename(source_file)}")
+                        temp_mp3 = os.path.join(temp_dir, f"temp_{i}.mp3")
+                        
+                        # 使用FFmpeg转换音频格式
+                        convert_command = [
+                            'ffmpeg',
+                            '-i', source_file,
+                            '-vn',  # 不处理视频流
+                            '-ar', '44100',  # 设置采样率
+                            '-ac', '2',  # 设置声道数
+                            '-b:a', '192k',  # 设置比特率
+                            '-y',
+                            temp_mp3
+                        ]
+                        
+                        try:
+                            # 执行转换命令
+                            process = subprocess.Popen(
+                                convert_command,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE
+                            )
+                            
+                            _, stderr = process.communicate()
+                            
+                            if process.returncode != 0:
+                                print(f"转换音频错误: {stderr.decode('utf-8', errors='ignore')}")
+                                raise Exception(f"转换音频文件失败: {os.path.basename(source_file)}")
+                            
+                            # 使用转换后的文件
+                            converted_files.append((i, temp_mp3))
+                            
+                        except Exception as e:
+                            print(f"转换音频出错: {str(e)}")
+                            raise Exception(f"转换音频文件失败: {os.path.basename(source_file)}")
+                
+                # 更新音乐信息中的文件路径
+                for idx, temp_file in converted_files:
+                    music_info[idx]['file'] = temp_file
+                
                 # 创建合并音频的列表文件
                 audio_list_file = os.path.join(temp_dir, "audio_list.txt")
                 with open(audio_list_file, 'w', encoding='utf-8') as f:
@@ -871,47 +971,159 @@ class MusicVideoGenerator:
             self.processing = False
     
     def extract_audio_info(self, audio_file):
-        """从音频文件提取元数据和时长"""
+        """提取音频文件的元数据"""
+        title = os.path.basename(audio_file)
+        artist = ""
+        duration = 0
+        
         try:
-            # 使用ffprobe提取元数据
-            command = [
-                'ffprobe',
-                '-v', 'quiet',
-                '-print_format', 'json',
-                '-show_format',
-                '-show_streams',
-                audio_file
-            ]
+            # 根据文件扩展名选择不同的处理方法
+            ext = os.path.splitext(audio_file)[1].lower()
             
-            process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            stdout, _ = process.communicate()
+            if ext == '.mp3':
+                # 处理MP3文件
+                audio = MP3(audio_file)
+                
+                # 尝试读取ID3标签
+                if audio.tags:
+                    # 尝试获取标题
+                    if 'TIT2' in audio.tags:
+                        title = str(audio.tags['TIT2'])
+                    
+                    # 尝试获取艺术家
+                    if 'TPE1' in audio.tags:
+                        artist = str(audio.tags['TPE1'])
+                
+                # 获取持续时间（秒）
+                duration = audio.info.length
+                
+            elif ext == '.flac':
+                # 处理FLAC文件
+                from mutagen.flac import FLAC
+                audio = FLAC(audio_file)
+                
+                # 尝试获取标题
+                if 'title' in audio:
+                    title = audio['title'][0]
+                
+                # 尝试获取艺术家
+                if 'artist' in audio:
+                    artist = audio['artist'][0]
+                
+                # 获取持续时间（秒）
+                duration = audio.info.length
+                
+            elif ext == '.wav':
+                # 处理WAV文件
+                from mutagen.wave import WAVE
+                audio = WAVE(audio_file)
+                
+                # WAV文件可能没有元数据，直接使用文件名作为标题
+                # 获取持续时间（秒）
+                duration = audio.info.length
             
-            if process.returncode == 0:
-                # 解析JSON响应
-                metadata = json.loads(stdout)
-                tags = metadata.get('format', {}).get('tags', {})
+            elif ext == '.wma':
+                # 处理WMA文件
+                from mutagen.asf import ASF
+                audio = ASF(audio_file)
                 
-                # 提取标题和艺术家
-                title = tags.get('title', os.path.splitext(os.path.basename(audio_file))[0])
-                artist = tags.get('artist', '')
+                # 尝试获取标题
+                if 'Title' in audio:
+                    title = str(audio['Title'][0])
                 
-                # 提取时长（秒）
-                duration_str = metadata.get('format', {}).get('duration', '0')
-                duration = float(duration_str)
+                # 尝试获取艺术家
+                if 'Author' in audio:
+                    artist = str(audio['Author'][0])
                 
-                return title, artist, duration
+                # 获取持续时间（秒）
+                duration = audio.info.length
+                
+            elif ext in ['.m4a', '.aac']:
+                # 处理M4A/AAC文件
+                from mutagen.mp4 import MP4
+                audio = MP4(audio_file)
+                
+                # 尝试获取标题
+                if '\xa9nam' in audio:
+                    title = audio['\xa9nam'][0]
+                
+                # 尝试获取艺术家
+                if '\xa9ART' in audio:
+                    artist = audio['\xa9ART'][0]
+                
+                # 获取持续时间（秒）
+                duration = audio.info.length
+                
+            else:
+                # 对于不支持的格式，使用FFmpeg获取时长
+                import subprocess
+                command = [
+                    'ffmpeg', 
+                    '-i', audio_file,
+                    '-f', 'null',
+                    '-'
+                ]
+                
+                process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True
+                )
+                
+                _, stderr = process.communicate()
+                
+                # 从输出中解析持续时间
+                duration_match = re.search(r"Duration: (\d+):(\d+):(\d+)\.(\d+)", stderr)
+                if duration_match:
+                    hours, minutes, seconds, centiseconds = map(int, duration_match.groups())
+                    duration = hours * 3600 + minutes * 60 + seconds + centiseconds / 100
             
-            # 如果提取失败，使用文件名作为标题
-            return os.path.splitext(os.path.basename(audio_file))[0], "", 0
+            # 如果没有提取到标题，使用文件名（不包含扩展名）
+            if not title or title == "None":
+                title = os.path.splitext(os.path.basename(audio_file))[0]
+            
+            # 如果文件名是 "艺术家-歌曲名" 格式，尝试提取
+            if not artist and "-" in title:
+                parts = title.split("-", 1)
+                if len(parts) == 2:
+                    artist = parts[0].strip()
+                    title = parts[1].strip()
             
         except Exception as e:
-            print(f"提取元数据时出错: {str(e)}")
-            # 如果出错，使用文件名作为标题
-            return os.path.splitext(os.path.basename(audio_file))[0], "", 0
+            print(f"提取音频信息时出错: {str(e)}")
+            # 如果出错，使用文件名（不包含扩展名）作为标题
+            title = os.path.splitext(os.path.basename(audio_file))[0]
+            
+            # 尝试使用FFmpeg获取时长
+            try:
+                import subprocess
+                command = [
+                    'ffmpeg', 
+                    '-i', audio_file,
+                    '-f', 'null',
+                    '-'
+                ]
+                
+                process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True
+                )
+                
+                _, stderr = process.communicate()
+                
+                # 从输出中解析持续时间
+                duration_match = re.search(r"Duration: (\d+):(\d+):(\d+)\.(\d+)", stderr)
+                if duration_match:
+                    hours, minutes, seconds, centiseconds = map(int, duration_match.groups())
+                    duration = hours * 3600 + minutes * 60 + seconds + centiseconds / 100
+            except:
+                # 如果FFmpeg也失败，使用默认值
+                duration = 0
+        
+        return title, artist, duration
     
     def format_time(self, seconds):
         """将秒数格式化为时:分:秒格式"""
@@ -1657,7 +1869,7 @@ class MusicVideoGenerator:
                 result_window.geometry("800x600")
                 
                 frame = tk.Frame(result_window)
-                frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+                frame.pack(fill=tk.BOTH, expand=True)
                 
                 scrollbar = tk.Scrollbar(frame)
                 scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
