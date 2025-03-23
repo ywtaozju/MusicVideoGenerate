@@ -228,17 +228,31 @@ class MusicVideoGenerator:
         select_output_btn = tk.Button(output_frame, text="选择目录", command=self.select_output, bg="#FF9800", fg="white", font=("Arial", 10), width=15)
         select_output_btn.pack(side=tk.RIGHT, padx=10, pady=10)
         
-        # 输出文件名
-        file_name_frame = tk.Frame(output_frame, bg="#f0f0f0")
-        file_name_frame.pack(fill=tk.X, padx=10, pady=5)
+        # 输出文件名和导出数量
+        output_settings_frame = tk.Frame(output_frame, bg="#f0f0f0")
+        output_settings_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        tk.Label(file_name_frame, text="输出文件名:", bg="#f0f0f0").pack(side=tk.LEFT, padx=5)
+        # 文件名输入
+        filename_frame = tk.Frame(output_settings_frame, bg="#f0f0f0")
+        filename_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        tk.Label(filename_frame, text="输出文件名:", bg="#f0f0f0").pack(side=tk.LEFT, padx=5)
         
         self.output_filename = tk.StringVar(value="歌单视频")
-        filename_entry = tk.Entry(file_name_frame, textvariable=self.output_filename, width=30)
-        filename_entry.pack(side=tk.LEFT, padx=5)
+        filename_entry = tk.Entry(filename_frame, textvariable=self.output_filename, width=30)
+        filename_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         
-        tk.Label(file_name_frame, text=".mp4", bg="#f0f0f0").pack(side=tk.LEFT)
+        tk.Label(filename_frame, text=".mp4", bg="#f0f0f0").pack(side=tk.LEFT)
+        
+        # 导出数量输入
+        count_frame = tk.Frame(output_settings_frame, bg="#f0f0f0")
+        count_frame.pack(side=tk.RIGHT)
+        
+        tk.Label(count_frame, text="导出数量:", bg="#f0f0f0").pack(side=tk.LEFT, padx=5)
+        
+        self.export_count = tk.IntVar(value=1)
+        count_spinbox = tk.Spinbox(count_frame, from_=1, to=10, textvariable=self.export_count, width=5)
+        count_spinbox.pack(side=tk.LEFT, padx=5)
         
         # 选项设置
         options_frame = tk.LabelFrame(self.content_frame, text="设置选项", bg="#f0f0f0", font=("Arial", 12))
@@ -486,6 +500,12 @@ class MusicVideoGenerator:
             messagebox.showwarning("警告", "请先选择输出目录！")
             return
         
+        # 获取导出数量
+        export_count = self.export_count.get()
+        if export_count < 1:
+            messagebox.showwarning("警告", "导出数量必须大于0！")
+            return
+        
         # 禁用生成按钮，并更改文本
         self.generate_btn.config(text="正在生成中...", state=tk.DISABLED, bg="#cccccc")
         
@@ -493,7 +513,71 @@ class MusicVideoGenerator:
         self.status_label.config(text="正在生成视频...")
         
         # 开始生成视频（使用线程防止界面冻结）
-        threading.Thread(target=self.generate_combined_video, daemon=True).start()
+        threading.Thread(target=lambda: self.generate_multiple_videos(export_count), daemon=True).start()
+    
+    def generate_multiple_videos(self, count):
+        """生成多个视频，第一个保持原顺序，之后的随机打乱"""
+        # 保存原始音乐文件列表和当前索引
+        self.original_music_files = self.music_files.copy()
+        self.current_video_index = 0
+        self.total_video_count = count
+        self.original_filename = self.output_filename.get()
+        
+        # 开始第一个视频生成
+        self.generate_next_video()
+    
+    def generate_next_video(self):
+        """生成下一个视频"""
+        try:
+            # 检查是否已完成所有视频生成
+            if self.current_video_index >= self.total_video_count:
+                # 所有视频已生成完成，恢复原始列表
+                self.music_files = self.original_music_files.copy()
+                # 恢复原始文件名
+                self.output_filename.set(self.original_filename)
+                # 恢复生成按钮状态
+                self.root.after(0, lambda: self.generate_btn.config(text="生成视频", state=tk.NORMAL, bg="#4CAF50"))
+                # 更新状态
+                self.root.after(0, lambda: self.status_label.configure(text=f"已完成所有 {self.total_video_count} 个视频生成"))
+                return
+            
+            # 设置文件名
+            if self.total_video_count > 1:
+                new_filename = f"{self.original_filename}_{self.current_video_index + 1}"
+                self.output_filename.set(new_filename)
+            
+            # 随机打乱（除第一个视频外）
+            if self.current_video_index > 0:
+                import random
+                self.music_files = self.original_music_files.copy()
+                random.shuffle(self.music_files)
+                # 更新状态
+                self.root.after(0, lambda idx=self.current_video_index+1, total=self.total_video_count: 
+                            self.status_label.configure(text=f"正在生成第 {idx}/{total} 个视频 (随机顺序)..."))
+            else:
+                # 第一次使用原始顺序
+                self.music_files = self.original_music_files.copy()
+                # 更新状态
+                self.root.after(0, lambda: self.status_label.configure(text=f"正在生成第 1/{self.total_video_count} 个视频 (原始顺序)..."))
+            
+            # 开始生成当前视频
+            threading.Thread(target=lambda: self.generate_combined_video(self.generate_next_video), daemon=True).start()
+            
+            # 增加索引，准备下一个视频
+            self.current_video_index += 1
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"生成多个视频时出错: {error_msg}")
+            self.root.after(0, lambda: self.status_label.configure(text=f"发生错误: {error_msg}"))
+            self.root.after(0, lambda: messagebox.showerror("错误", f"生成多个视频时出错: {error_msg}"))
+            
+            # 恢复生成按钮状态
+            self.root.after(0, lambda: self.generate_btn.config(text="生成视频", state=tk.NORMAL, bg="#4CAF50"))
+            
+            # 恢复原始设置
+            self.music_files = self.original_music_files.copy()
+            self.output_filename.set(self.original_filename)
     
     def start_progress_monitor(self):
         """启动进度监控线程，定期检查队列中的进度更新并应用到UI"""
@@ -551,7 +635,7 @@ class MusicVideoGenerator:
             # 计算百分比进度 (0-1范围)
             return min(current_time / duration, 1.0) if duration else 0
         return None
-
+    
     def run_ffmpeg_with_progress(self, command, stage, total_duration, message_prefix):
         """运行FFmpeg命令并报告进度"""
         try:
@@ -585,7 +669,7 @@ class MusicVideoGenerator:
             print(f"FFmpeg执行错误: {str(e)}")
             return -1
     
-    def generate_combined_video(self):
+    def generate_combined_video(self, callback=None):
         try:
             # 标记处理开始
             self.processing = True
@@ -985,8 +1069,12 @@ class MusicVideoGenerator:
                 elapsed_str = self.format_elapsed_time(final_time)
                 self.root.after(0, lambda t=elapsed_str: self.time_label.configure(text=f"总耗时: {t}"))
             
-            # 恢复生成按钮状态
-            self.root.after(0, lambda: self.generate_btn.config(text="生成视频", state=tk.NORMAL, bg="#4CAF50"))
+            # 如果是单独生成视频模式，恢复生成按钮状态
+            if callback is None:
+                self.root.after(0, lambda: self.generate_btn.config(text="生成视频", state=tk.NORMAL, bg="#4CAF50"))
+            else:
+                # 调用回调函数处理下一个视频
+                self.root.after(100, callback)
     
     def extract_audio_info(self, audio_file):
         """提取音频文件的元数据"""
