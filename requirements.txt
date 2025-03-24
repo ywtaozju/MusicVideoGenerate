@@ -1,2 +1,4 @@
 pillow==9.5.0
-tkinter 
+pyinstaller>=5.9.0
+mutagen>=1.45.1
+eyed3>=0.9.6 
