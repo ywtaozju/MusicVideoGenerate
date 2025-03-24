@@ -47,6 +47,9 @@ class MusicVideoGenerator:
         self.music_files = []
         self.music_item_frames = []  # 初始化音乐项目框架列表
         self.image_file = ""
+        self.image_folder = ""  # 添加图片文件夹路径
+        self.image_files = []   # 添加图片文件列表
+        self.current_image_index = 0  # 当前使用的图片索引
         self.output_dir = ""
         self.lyrics_folder = ""  # 歌词文件夹路径
         self.merge_mode = True  # 合并模式标志
@@ -209,13 +212,13 @@ class MusicVideoGenerator:
         add_lyrics_btn.pack(side=tk.LEFT, padx=2)
         
         # 选择封面图片
-        image_frame = tk.LabelFrame(self.content_frame, text="选择封面图片", bg="#f0f0f0", font=("Arial", 12))
+        image_frame = tk.LabelFrame(self.content_frame, text="选择图片文件夹", bg="#f0f0f0", font=("Arial", 12))
         image_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        self.image_label = tk.Label(image_frame, text="未选择图片", bg="#f0f0f0", width=70, height=5)
+        self.image_label = tk.Label(image_frame, text="未选择图片文件夹", bg="#f0f0f0", anchor=tk.W, justify=tk.LEFT, padx=10, wraplength=600)
         self.image_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        select_image_btn = tk.Button(image_frame, text="选择图片", command=self.select_image, bg="#2196F3", fg="white", font=("Arial", 10), width=15)
+        select_image_btn = tk.Button(image_frame, text="选择文件夹", command=self.select_image, bg="#2196F3", fg="white", font=("Arial", 10), width=15)
         select_image_btn.pack(side=tk.RIGHT, padx=10, pady=10)
         
         # 选择输出目录和文件名
@@ -479,21 +482,31 @@ class MusicVideoGenerator:
             messagebox.showerror("错误", f"下移音乐时出错: {str(e)}")
     
     def select_image(self):
-        file = filedialog.askopenfilename(
-            title="选择封面图片",
-            filetypes=(("图片文件", "*.jpg *.jpeg *.png"), ("所有文件", "*.*"))
-        )
-        if file:
-            self.image_file = file
-            self.image_label.config(text=os.path.basename(file))
-            try:
-                img = Image.open(file)
-                img = img.resize((100, 100), Image.LANCZOS)
-                photo = ImageTk.PhotoImage(img)
-                self.image_label.config(image=photo, compound=tk.LEFT)
-                self.image_label.image = photo
-            except Exception as e:
-                messagebox.showerror("错误", f"加载图片时出错: {str(e)}")
+        # 修改为选择图片文件夹
+        folder = filedialog.askdirectory(title="选择图片文件夹")
+        if folder:
+            # 保存文件夹路径
+            self.image_folder = folder
+            
+            # 搜索文件夹中的所有图片文件
+            self.image_files = []
+            supported_formats = ('.jpg', '.jpeg', '.png', '.bmp', '.gif')
+            for file in sorted(os.listdir(folder)):
+                if file.lower().endswith(supported_formats):
+                    self.image_files.append(os.path.join(folder, file))
+            
+            # 检查是否找到了图片
+            if not self.image_files:
+                messagebox.showwarning("警告", "所选文件夹中没有找到支持的图片文件！")
+                return
+            
+            # 重置当前图片索引并设置第一张图片为当前图片
+            self.current_image_index = 0
+            self.image_file = self.image_files[0] if self.image_files else ""
+            
+            # 更新UI显示，只显示文件夹路径和图片数量
+            self.image_label.config(text=f"已选择文件夹: {folder} (包含 {len(self.image_files)} 张图片)", image="", compound=tk.NONE)
+            self.image_label.image = None
     
     def select_output(self):
         directory = filedialog.askdirectory(title="选择输出目录")
@@ -507,8 +520,8 @@ class MusicVideoGenerator:
             messagebox.showwarning("警告", "请先添加音乐文件！")
             return
         
-        if not self.image_file:
-            messagebox.showwarning("警告", "请先选择一张封面图片！")
+        if not self.image_files:
+            messagebox.showwarning("警告", "请先选择包含图片的文件夹！")
             return
         
         if not self.output_dir:
@@ -577,6 +590,9 @@ class MusicVideoGenerator:
         self.current_video_index = 0
         self.total_video_count = count
         self.original_filename = self.output_filename.get()
+        
+        # 重置图片索引，从第一张图片开始
+        self.current_image_index = 0
         
         # 初始化总耗时
         self.total_process_time = 0
@@ -682,6 +698,16 @@ class MusicVideoGenerator:
                 self.music_files = self.original_music_files.copy()
                 # 更新状态
                 self.root.after(0, lambda: self.status_label.configure(text=f"正在生成第 1/{self.total_video_count} 个视频 (原始顺序)..."))
+            
+            # 为当前视频选择图片
+            if self.image_files:
+                # 选择当前索引对应的图片
+                self.image_file = self.image_files[self.current_image_index % len(self.image_files)]
+                # 增加图片索引，为下一个视频准备
+                self.current_image_index += 1
+                # 如果索引超出范围，重新开始
+                if self.current_image_index >= len(self.image_files):
+                    self.current_image_index = 0
             
             # 开始生成当前视频
             threading.Thread(target=lambda: self.generate_combined_video(self.on_video_complete), daemon=True).start()
