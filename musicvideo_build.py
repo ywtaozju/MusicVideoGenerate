@@ -56,6 +56,34 @@ def create_exe():
             pathex.append(site_packages)
             print(f"添加conda环境路径: {site_packages}")
     
+    # 首先创建runtime_hook来处理ffmpeg的控制台窗口问题
+    os.makedirs("hooks", exist_ok=True)
+    hook_content = """
+# hook用于隐藏子进程的控制台窗口
+import subprocess
+import sys
+
+# 如果在Windows上，修改subprocess.Popen类，默认添加隐藏控制台窗口的标志
+if sys.platform == 'win32':
+    # 保存原始的Popen构造函数
+    original_popen_init = subprocess.Popen.__init__
+    
+    # 创建一个新的初始化函数，它会添加隐藏窗口的标志
+    def popen_init_no_window(self, *args, **kwargs):
+        # 如果没有指定creationflags，添加CREATE_NO_WINDOW标志
+        if 'creationflags' not in kwargs:
+            kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+        
+        # 调用原始初始化函数
+        original_popen_init(self, *args, **kwargs)
+    
+    # 替换原始的初始化函数
+    subprocess.Popen.__init__ = popen_init_no_window
+"""
+    
+    with open("hooks/subprocess_hook.py", "w", encoding="utf-8") as f:
+        f.write(hook_content)
+    
     # 创建临时spec文件
     spec_content = f"""# -*- mode: python ; coding: utf-8 -*-
 
@@ -67,9 +95,9 @@ a = Analysis(
     binaries=[],
     datas=[],
     hiddenimports=['PIL._tkinter_finder', 'mutagen.id3', 'mutagen.mp3', 'mutagen.flac', 'mutagen.wave', 'mutagen.asf', 'mutagen.mp4', 'eyed3'],
-    hookspath=[],
+    hookspath=['hooks'],
     hooksconfig={{}},
-    runtime_hooks=[],
+    runtime_hooks=['hooks/subprocess_hook.py'],
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
