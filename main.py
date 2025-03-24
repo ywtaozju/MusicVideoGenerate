@@ -50,6 +50,7 @@ class MusicVideoGenerator:
         self.image_folder = ""  # 添加图片文件夹路径
         self.image_files = []   # 添加图片文件列表
         self.current_image_index = 0  # 当前使用的图片索引
+        self.overlay_image = ""  # 叠加图片路径
         self.output_dir = ""
         self.lyrics_folder = ""  # 歌词文件夹路径
         self.merge_mode = True  # 合并模式标志
@@ -212,14 +213,36 @@ class MusicVideoGenerator:
         add_lyrics_btn.pack(side=tk.LEFT, padx=2)
         
         # 选择封面图片
-        image_frame = tk.LabelFrame(self.content_frame, text="选择图片文件夹", bg="#f0f0f0", font=("Arial", 12))
+        image_frame = tk.LabelFrame(self.content_frame, text="选择背景图片文件夹", bg="#f0f0f0", font=("Arial", 12))
         image_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        self.image_label = tk.Label(image_frame, text="未选择图片文件夹", bg="#f0f0f0", anchor=tk.W, justify=tk.LEFT, padx=10, wraplength=600)
+        self.image_label = tk.Label(image_frame, text="未选择背景图片文件夹", bg="#f0f0f0", anchor=tk.W, justify=tk.LEFT, padx=10, wraplength=600)
         self.image_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         select_image_btn = tk.Button(image_frame, text="选择文件夹", command=self.select_image, bg="#2196F3", fg="white", font=("Arial", 10), width=15)
         select_image_btn.pack(side=tk.RIGHT, padx=10, pady=10)
+        
+        # 添加叠加图片选择
+        overlay_frame = tk.LabelFrame(self.content_frame, text="选择背景叠加图片", bg="#f0f0f0", font=("Arial", 12))
+        overlay_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # 创建左侧区域用于显示预览图和文件路径
+        overlay_left_frame = tk.Frame(overlay_frame, bg="#f0f0f0")
+        overlay_left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        self.overlay_label = tk.Label(overlay_left_frame, text="未选择叠加图片", bg="#f0f0f0", anchor=tk.CENTER, justify=tk.CENTER, padx=10, wraplength=600)
+        self.overlay_label.pack(fill=tk.BOTH, expand=True)
+        
+        # 创建右侧按钮区域
+        overlay_right_frame = tk.Frame(overlay_frame, bg="#f0f0f0")
+        overlay_right_frame.pack(side=tk.RIGHT, padx=10, pady=10)
+        
+        select_overlay_btn = tk.Button(overlay_right_frame, text="选择图片", command=self.select_overlay, bg="#673AB7", fg="white", font=("Arial", 10), width=15)
+        select_overlay_btn.pack(side=tk.RIGHT)
+        
+        # 添加清除按钮
+        clear_overlay_btn = tk.Button(overlay_right_frame, text="清除图片", command=self.clear_overlay, bg="#F44336", fg="white", font=("Arial", 10), width=15)
+        clear_overlay_btn.pack(side=tk.RIGHT, padx=5)
         
         # 选择输出目录和文件名
         output_frame = tk.LabelFrame(self.content_frame, text="选择输出位置", bg="#f0f0f0", font=("Arial", 12))
@@ -483,7 +506,7 @@ class MusicVideoGenerator:
     
     def select_image(self):
         # 修改为选择图片文件夹
-        folder = filedialog.askdirectory(title="选择图片文件夹")
+        folder = filedialog.askdirectory(title="选择背景图片文件夹")
         if folder:
             # 保存文件夹路径
             self.image_folder = folder
@@ -505,8 +528,48 @@ class MusicVideoGenerator:
             self.image_file = self.image_files[0] if self.image_files else ""
             
             # 更新UI显示，只显示文件夹路径和图片数量
-            self.image_label.config(text=f"已选择文件夹: {folder} (包含 {len(self.image_files)} 张图片)", image="", compound=tk.NONE)
+            self.image_label.config(text=f"已选择背景图片文件夹: {folder} (包含 {len(self.image_files)} 张图片)", image="", compound=tk.NONE)
             self.image_label.image = None
+    
+    def select_overlay(self):
+        """选择叠加背景图片"""
+        file = filedialog.askopenfilename(
+            title="选择背景叠加图片",
+            filetypes=(("图片文件", "*.jpg *.jpeg *.png *.bmp *.gif"), ("所有文件", "*.*"))
+        )
+        if file:
+            self.overlay_image = file
+            try:
+                # 创建预览图片
+                img = Image.open(file)
+                # 计算预览图片大小，保持比例但限制最大高度为150
+                width, height = img.size
+                ratio = width / height
+                preview_height = 150
+                preview_width = int(preview_height * ratio)
+                
+                # 如果预览宽度太大，则限制宽度并重新计算高度
+                if preview_width > 300:
+                    preview_width = 300
+                    preview_height = int(preview_width / ratio)
+                
+                img = img.resize((preview_width, preview_height), Image.LANCZOS)
+                photo = ImageTk.PhotoImage(img)
+                
+                # 更新UI显示预览图片
+                self.overlay_label.config(image=photo, compound=tk.TOP)
+                self.overlay_label.image = photo
+                
+                # 在预览图片下方显示文件路径
+                self.overlay_label.config(text=f"已选择叠加图片: {file}")
+            except Exception as e:
+                messagebox.showerror("错误", f"加载叠加图片时出错: {str(e)}")
+    
+    def clear_overlay(self):
+        """清除叠加背景图片"""
+        self.overlay_image = ""
+        self.overlay_label.config(text="未选择叠加图片", image="", compound=tk.NONE)
+        self.overlay_label.image = None
     
     def select_output(self):
         directory = filedialog.askdirectory(title="选择输出目录")
@@ -1421,7 +1484,32 @@ class MusicVideoGenerator:
             # 确保图片是1080p (1920x1080)
             if img.size != (1920, 1080):
                 img = img.resize((1920, 1080), Image.LANCZOS)
-                
+            
+            # 如果有叠加图片，处理叠加效果
+            if self.overlay_image and os.path.exists(self.overlay_image):
+                try:
+                    # 打开叠加图片
+                    overlay = Image.open(self.overlay_image)
+                    # 将叠加图片调整为相同大小
+                    overlay = overlay.resize((1920, 1080), Image.LANCZOS)
+                    
+                    # 确保叠加图片有Alpha通道，如果没有则添加
+                    if overlay.mode != 'RGBA':
+                        overlay = overlay.convert('RGBA')
+                    
+                    # 如果背景图片没有Alpha通道，添加一个
+                    if img.mode != 'RGBA':
+                        img = img.convert('RGBA')
+                    
+                    # 叠加图片
+                    img = Image.alpha_composite(img, overlay)
+                    
+                    # 转回RGB模式，因为有些处理需要RGB模式
+                    img = img.convert('RGB')
+                except Exception as e:
+                    print(f"处理叠加图片时出错: {str(e)}")
+                    # 如果叠加过程出错，继续使用原始图片
+            
             # 创建绘图对象
             draw = ImageDraw.Draw(img)
             
