@@ -39,6 +39,11 @@ import time
 class MusicVideoGenerator:
     def __init__(self, root):
         self.root = root
+        
+        # 添加鉴权验证
+        if not self.verify_authority():
+            return
+            
         self.root.title("歌单视频生成器")
         self.root.geometry("850x650")
         self.root.minsize(800, 600)  # 设置最小窗口大小
@@ -81,6 +86,28 @@ class MusicVideoGenerator:
         self.processing = False
         # 开始进度更新线程
         self.start_progress_monitor()
+    
+    def verify_authority(self):
+        """验证程序使用权限"""
+        try:
+            # 请求授权文件
+            response = urllib.request.urlopen("https://file-1301801484.cos.ap-nanjing.myqcloud.com/Authority/MusicVideoGenerate.txt", timeout=10)
+            content = response.read().decode("utf-8").strip()
+            
+            # 检查权限
+            if content == "ok":
+                return True
+            else:
+                # 显示授权信息
+                messagebox.showinfo("授权信息", content)
+                self.root.destroy()
+                return False
+                
+        except Exception as e:
+            # 网络错误或其他异常
+            messagebox.showinfo("网络错误", "无法连接到授权服务器，请检查网络连接后重试。")
+            self.root.destroy()
+            return False
     
     def create_default_lyrics_folder(self):
         """创建默认的歌词文件夹"""
