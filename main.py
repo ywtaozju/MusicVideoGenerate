@@ -1361,6 +1361,9 @@ class MusicVideoGenerator:
                     
                     # 如果前面的步骤没有成功，尝试标准视频生成
                     if not video_creation_success:
+                        # 创建临时视频文件
+                        temp_video = os.path.join(temp_dir, "temp_video.mp4")
+                        
                         # 创建标准视频（无字幕或非Windows系统）
                         video_command = [
                             'ffmpeg',
@@ -1383,8 +1386,8 @@ class MusicVideoGenerator:
                                 '-vf', f"subtitles='{subtitle_file}'"
                             ])
                         
-                        # 添加输出文件
-                        video_command.append(safe_output_file)
+                        # 添加临时输出文件
+                        video_command.append(temp_video)
                         
                         print(f"执行创建视频命令: {' '.join(video_command)}")
                         
@@ -1393,10 +1396,39 @@ class MusicVideoGenerator:
                             video_command, 
                             'video', 
                             total_duration, 
-                            "步骤4/4: 生成最终视频"
+                            "步骤4/4: 生成临时视频"
                         )
                         
                         if video_result != 0:
+                            raise Exception("生成临时视频失败")
+                            
+                        # 复制临时视频到最终位置
+                        self.progress_queue.put({
+                            'stage': 'video',
+                            'progress': 0.9,
+                            'message': "步骤4/4: 完成视频处理..."
+                        })
+                        
+                        copy_command = [
+                            'ffmpeg',
+                            '-i', temp_video,
+                            '-c', 'copy',
+                            '-y',
+                            safe_output_file
+                        ]
+                        
+                        print(f"执行复制最终视频命令: {' '.join(copy_command)}")
+                        
+                        process = subprocess.Popen(
+                            copy_command,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE
+                        )
+                        
+                        _, stderr = process.communicate()
+                        
+                        if process.returncode != 0:
+                            print(f"复制最终视频错误: {stderr.decode('utf-8', errors='ignore')}")
                             raise Exception("生成视频失败")
                     
                     # 最终完成处理
