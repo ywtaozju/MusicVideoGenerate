@@ -1291,13 +1291,16 @@ class MusicVideoGenerator:
                         os.chdir(temp_dir)
                         
                         try:
+                            # 获取用户设置的字体大小
+                            font_size = self.lyrics_font_size.get()
+                            
                             # 使用相对路径
                             sub_command = [
                                 'ffmpeg',
                                 '-loop', '1',
                                 '-i', img_with_playlist,
                                 '-i', temp_audio,
-                                '-vf', 'subtitles=lyrics.srt',
+                                '-vf', f'subtitles=lyrics.srt:force_style=\'FontSize={font_size}\'',
                                 '-c:v', 'h264_nvenc' if self.gpu_acceleration_var.get() and self.use_gpu else 'libx264',
                                 '-preset', 'p7' if self.gpu_acceleration_var.get() and self.use_gpu else 'medium',
                                 '-crf', '23',
@@ -1382,8 +1385,10 @@ class MusicVideoGenerator:
                         
                         # 如果是非Windows系统且有字幕文件，添加字幕滤镜
                         if subtitle_file and os.path.exists(subtitle_file) and os.name != 'nt':
+                            # 添加字体大小设置
+                            font_size = self.lyrics_font_size.get()
                             video_command.extend([
-                                '-vf', f"subtitles='{subtitle_file}'"
+                                '-vf', f"subtitles='{subtitle_file}':force_style='FontSize={font_size}'"
                             ])
                         
                         # 添加临时输出文件
@@ -2124,6 +2129,11 @@ class MusicVideoGenerator:
             with open(output_srt, 'w', encoding='utf-8') as srt_file:
                 subtitle_index = 1
                 
+                # 添加字体大小设置
+                srt_file.write("1\n")
+                srt_file.write("00:00:00,000 --> 00:00:00,000\n")
+                srt_file.write(f"<font size=\"{self.lyrics_font_size.get()}\">\n\n")
+                
                 for info in music_info:
                     if not info['has_lyrics'] or not info['lyrics_path']:
                         continue
@@ -2182,7 +2192,7 @@ class MusicVideoGenerator:
                         if not lyric['text'].strip():
                             continue
                         
-                        # 写入SRT条目
+                        # 写入SRT条目，添加字体大小标签
                         srt_file.write(f"{subtitle_index}\n")
                         srt_file.write(f"{start_time_str} --> {end_time_str}\n")
                         srt_file.write(f"{lyric['text']}\n\n")
@@ -2202,87 +2212,6 @@ class MusicVideoGenerator:
         milliseconds = int((seconds - int(seconds)) * 1000)
         
         return f"{hours:02d}:{minutes:02d}:{seconds_part:02d},{milliseconds:03d}"
-
-    def convert_srt_to_ass(self, srt_file, ass_file):
-        """将SRT字幕文件转换为ASS格式"""
-        try:
-            # 使用FFmpeg将SRT转换为ASS
-            convert_command = [
-                'ffmpeg',
-                '-i', srt_file,
-                '-y',
-                ass_file
-            ]
-            
-            process = subprocess.Popen(
-                convert_command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            
-            process.communicate()
-            
-            if process.returncode != 0 or not os.path.exists(ass_file):
-                # 如果转换失败，手动创建一个简单的ASS文件
-                self.create_simple_ass(srt_file, ass_file)
-                
-            return True
-        except Exception as e:
-            print(f"转换SRT到ASS时出错: {str(e)}")
-            # 尝试手动创建
-            self.create_simple_ass(srt_file, ass_file)
-            return False
-    
-    def create_simple_ass(self, srt_file, ass_file):
-        """手动创建简单的ASS文件"""
-        try:
-            # 读取SRT内容
-            with open(srt_file, 'r', encoding='utf-8') as f:
-                srt_content = f.read()
-            
-            # 获取用户设置的歌词字体大小
-            lyrics_font_size = self.lyrics_font_size.get()
-            
-            # 创建ASS头部
-            ass_header = f"""[Script Info]
-ScriptType: v4.00+
-PlayResX: 1920
-PlayResY: 1080
-ScaledBorderAndShadow: yes
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,{lyrics_font_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,30,1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
-            
-            # 解析SRT并创建ASS事件
-            ass_events = []
-            pattern = r"(\d+)\s+(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2},\d{3})\s+(.+?)(?=\n\n|\Z)"
-            
-            for match in re.finditer(pattern, srt_content, re.DOTALL):
-                _, start_time, end_time, text = match.groups()
-                
-                # 转换时间格式 (HH:MM:SS,mmm -> H:MM:SS.mm)
-                start_time = start_time.replace(',', '.')
-                end_time = end_time.replace(',', '.')
-                
-                # 创建ASS事件行
-                text = text.strip().replace('\n', '\\N')
-                ass_event = f"Dialogue: 0,{start_time},{end_time},Default,,0,0,0,,{text}"
-                ass_events.append(ass_event)
-            
-            # 写入ASS文件
-            with open(ass_file, 'w', encoding='utf-8') as f:
-                f.write(ass_header)
-                f.write('\n'.join(ass_events))
-                
-            return True
-        except Exception as e:
-            print(f"创建简单ASS文件时出错: {str(e)}")
-            return False
 
     def format_elapsed_time(self, seconds):
         """格式化已用时间为 HH:MM:SS 格式"""
