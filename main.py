@@ -212,34 +212,42 @@ class MusicVideoGenerator:
         music_btn_frame = tk.Frame(music_frame, bg="#f0f0f0")
         music_btn_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
         
-        # 创建按钮行1
+        # 第一行：添加音乐
         btn_row1 = tk.Frame(music_btn_frame, bg="#f0f0f0")
         btn_row1.pack(fill=tk.X, pady=(0, 5))
         
-        add_music_btn = tk.Button(btn_row1, text="添加音乐", command=self.add_music, bg="#4CAF50", fg="white", font=("Arial", 10), width=15)
-        add_music_btn.pack(side=tk.LEFT, padx=2)
+        add_music_btn = tk.Button(btn_row1, text="添加音乐", command=self.add_music, bg="#4CAF50", fg="white", font=("Arial", 10), width=30)
+        add_music_btn.pack(padx=2, pady=2)
         
-        remove_music_btn = tk.Button(btn_row1, text="移除选中音乐", command=self.remove_music, bg="#f44336", fg="white", font=("Arial", 10), width=15)
-        remove_music_btn.pack(side=tk.LEFT, padx=2)
-        
-        # 上下移动按钮
-        move_up_btn = tk.Button(btn_row1, text="上移", command=self.move_up, bg="#2196F3", fg="white", font=("Arial", 10), width=8)
-        move_up_btn.pack(side=tk.LEFT, padx=2)
-        
-        move_down_btn = tk.Button(btn_row1, text="下移", command=self.move_down, bg="#2196F3", fg="white", font=("Arial", 10), width=8)
-        move_down_btn.pack(side=tk.LEFT, padx=2)
-        
-        # 创建按钮行2
+        # 第二行：上移和下移
         btn_row2 = tk.Frame(music_btn_frame, bg="#f0f0f0")
-        btn_row2.pack(fill=tk.X)
+        btn_row2.pack(fill=tk.X, pady=(0, 5))
         
-        # 检查歌词按钮
-        check_lyrics_btn = tk.Button(btn_row2, text="检查歌词", command=self.check_selected_lyrics, bg="#FF9800", fg="white", font=("Arial", 10), width=20)
-        check_lyrics_btn.pack(side=tk.LEFT, padx=2)
+        move_up_btn = tk.Button(btn_row2, text="上移", command=self.move_up, bg="#2196F3", fg="white", font=("Arial", 10), width=15)
+        move_up_btn.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         
-        # 添加歌词按钮
-        add_lyrics_btn = tk.Button(btn_row2, text="添加歌词", command=self.add_lyrics_to_selected, bg="#9C27B0", fg="white", font=("Arial", 10), width=20)
-        add_lyrics_btn.pack(side=tk.LEFT, padx=2)
+        move_down_btn = tk.Button(btn_row2, text="下移", command=self.move_down, bg="#2196F3", fg="white", font=("Arial", 10), width=15)
+        move_down_btn.pack(side=tk.RIGHT, padx=2, fill=tk.X, expand=True)
+        
+        # 第三行：移除选中音乐和清空所有
+        btn_row3 = tk.Frame(music_btn_frame, bg="#f0f0f0")
+        btn_row3.pack(fill=tk.X, pady=(0, 5))
+        
+        remove_music_btn = tk.Button(btn_row3, text="移除选中音乐", command=self.remove_music, bg="#f44336", fg="white", font=("Arial", 10), width=15)
+        remove_music_btn.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
+        
+        clear_all_btn = tk.Button(btn_row3, text="清空所有音乐", command=self.clear_music_list, bg="#FF5722", fg="white", font=("Arial", 10), width=15)
+        clear_all_btn.pack(side=tk.RIGHT, padx=2, fill=tk.X, expand=True)
+        
+        # 第四行：添加歌词和检查歌词
+        btn_row4 = tk.Frame(music_btn_frame, bg="#f0f0f0")
+        btn_row4.pack(fill=tk.X)
+        
+        add_lyrics_btn = tk.Button(btn_row4, text="添加歌词", command=self.add_lyrics_to_selected, bg="#9C27B0", fg="white", font=("Arial", 10), width=15)
+        add_lyrics_btn.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
+        
+        check_lyrics_btn = tk.Button(btn_row4, text="检查歌词", command=self.check_selected_lyrics, bg="#FF9800", fg="white", font=("Arial", 10), width=15)
+        check_lyrics_btn.pack(side=tk.RIGHT, padx=2, fill=tk.X, expand=True)
         
         # 选择封面图片
         image_frame = tk.LabelFrame(self.content_frame, text="选择背景图片文件夹", bg="#f0f0f0", font=("Arial", 12))
@@ -2677,6 +2685,30 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         minutes = int((seconds % 3600) // 60)
         seconds = int(seconds % 60)
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+    def clear_music_list(self):
+        """清空已选择的所有音乐文件"""
+        if not self.music_files:
+            return
+            
+        # 确认是否清空
+        response = messagebox.askyesno("确认", "确定要清空所有已选择的歌曲吗？")
+        if not response:
+            return
+            
+        # 清空列表
+        self.music_files = []
+        self.music_list.delete(0, tk.END)
+        
+        # 清空UI
+        for widget in self.music_items_frame.winfo_children():
+            widget.destroy()
+        
+        # 清空引用列表
+        self.music_item_frames = []
+        
+        # 更新UI状态
+        self.status_label.config(text="已清空所有歌曲")
 
 if __name__ == "__main__":
     root = tk.Tk()
