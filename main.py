@@ -60,6 +60,8 @@ class MusicVideoGenerator:
         self.lyrics_folder = ""  # 歌词文件夹路径
         self.merge_mode = True  # 合并模式标志
         self.use_gpu = False    # 是否使用GPU加速
+        self.is_generating = False  # 添加标志跟踪是否正在生成视频
+        self.ffmpeg_process = None  # 添加变量存储FFmpeg进程
         
         # 添加用于跟踪处理时间的变量
         self.start_time = 0
@@ -606,6 +608,10 @@ class MusicVideoGenerator:
     
     def start_generation(self):
         """开始生成视频"""
+        # 如果已经在生成，不做任何操作
+        if self.is_generating:
+            return
+            
         if not self.music_files:
             messagebox.showwarning("警告", "请先添加音乐文件！")
             return
@@ -664,8 +670,11 @@ class MusicVideoGenerator:
             else:
                 return
         
-        # 禁用生成按钮，并更改文本
-        self.generate_btn.config(text="正在生成中...", state=tk.DISABLED, bg="#cccccc")
+        # 设置生成标志
+        self.is_generating = True
+        
+        # 将生成按钮更改为停止按钮
+        self.generate_btn.config(text="停止生成", command=self.stop_generation, bg="#f44336")
         
         # 更新状态
         self.status_label.config(text="正在生成视频...")
@@ -675,6 +684,9 @@ class MusicVideoGenerator:
     
     def generate_multiple_videos(self, count):
         """生成多个视频，第一个保持原顺序，之后的随机打乱"""
+        # 确保设置生成标志
+        self.is_generating = True
+        
         # 保存原始音乐文件列表和当前索引
         self.original_music_files = self.music_files.copy()
         self.current_video_index = 0
@@ -719,18 +731,25 @@ class MusicVideoGenerator:
     def generate_next_video(self):
         """生成下一个视频"""
         try:
-            # 检查是否已完成所有视频生成
-            if self.current_video_index >= self.total_video_count:
-                # 所有视频已生成完成，恢复原始列表
+            # 检查是否已完成所有视频生成或者是否请求停止
+            if self.current_video_index >= self.total_video_count or not self.is_generating:
+                # 所有视频已生成完成或请求停止，恢复原始列表
                 self.music_files = self.original_music_files.copy()
                 # 恢复原始文件名
                 self.output_filename.set(self.original_filename)
                 # 恢复生成按钮状态
-                self.root.after(0, lambda: self.generate_btn.config(text="生成视频", state=tk.NORMAL, bg="#4CAF50"))
+                self.root.after(0, lambda: self.generate_btn.config(text="生成视频", command=self.start_generation, state=tk.NORMAL, bg="#4CAF50"))
                 # 更新状态和导出进度
-                self.root.after(0, lambda: self.status_label.configure(text=f"已完成所有 {self.total_video_count} 个视频生成"))
-                self.root.after(0, lambda tot=self.total_video_count: self.export_progress_label.configure(
-                    text=f"导出进度: {tot}/{tot} 视频完成"))
+                if not self.is_generating:
+                    self.root.after(0, lambda: self.status_label.configure(text=f"已停止视频生成"))
+                else:
+                    self.root.after(0, lambda: self.status_label.configure(text=f"已完成所有 {self.total_video_count} 个视频生成"))
+                    
+                self.root.after(0, lambda cur=self.current_video_index, tot=self.total_video_count: self.export_progress_label.configure(
+                    text=f"导出进度: {cur}/{tot} 视频完成"))
+                    
+                # 重置生成标志
+                self.is_generating = False
                 return
             
             # 设置文件名
@@ -902,8 +921,15 @@ class MusicVideoGenerator:
                 text=True
             )
             
+            # 存储进程引用以便可以在需要时终止
+            self.ffmpeg_process = process
+            
             # 读取错误输出（FFmpeg将进度信息输出到stderr）
             for line in process.stderr:
+                # 如果已经请求停止处理，则终止循环
+                if not self.is_generating:
+                    break
+                    
                 # 解析进度
                 progress = self.parse_ffmpeg_progress(line, total_duration)
                 if progress is not None:
@@ -915,17 +941,65 @@ class MusicVideoGenerator:
                         'message': f"{message_prefix} ({percentage}%)"
                     })
             
-            # 等待进程完成
-            process.wait()
+            # 等待进程完成或终止它
+            if not self.is_generating and process.poll() is None:
+                process.terminate()
+                process.wait(timeout=5)
+                # 如果进程未能在超时时间内终止，则强制终止
+                if process.poll() is None:
+                    process.kill()
+            else:
+                process.wait()
+                
+            self.ffmpeg_process = None
             return process.returncode
         except Exception as e:
             print(f"FFmpeg执行错误: {str(e)}")
+            self.ffmpeg_process = None
             return -1
+            
+    def stop_generation(self):
+        """停止视频生成过程"""
+        if not self.is_generating:
+            return
+            
+        # 设置标志以停止处理
+        self.is_generating = False
+        
+        # 终止当前FFmpeg进程（如果有）
+        if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
+            try:
+                self.ffmpeg_process.terminate()
+                # 给进程一些时间来优雅地关闭
+                self.ffmpeg_process.wait(timeout=5)
+                # 如果进程未能在超时时间内终止，则强制终止
+                if self.ffmpeg_process.poll() is None:
+                    self.ffmpeg_process.kill()
+            except Exception as e:
+                print(f"终止FFmpeg进程时出错: {str(e)}")
+        
+        # 重置计时器
+        self.timer_running = False
+        
+        # 更新UI
+        self.root.after(0, lambda: self.status_label.configure(text="已停止视频生成"))
+        self.root.after(0, lambda: self.generate_btn.config(text="生成视频", command=self.start_generation, state=tk.NORMAL, bg="#4CAF50"))
+        
+        # 如果处于批量生成模式，则恢复原始设置
+        if hasattr(self, 'original_music_files'):
+            self.music_files = self.original_music_files.copy()
+            if hasattr(self, 'original_filename'):
+                self.output_filename.set(self.original_filename)
     
     def generate_combined_video(self, callback=None):
         try:
             # 标记处理开始
             self.processing = True
+            
+            # 如果已经请求停止，直接返回
+            if not self.is_generating:
+                self.processing = False
+                return
             
             # 开始计时
             self.start_time = time.time()
@@ -946,6 +1020,11 @@ class MusicVideoGenerator:
                 total_duration = 0
                 
                 for music_file in self.music_files:
+                    # 检查是否请求停止
+                    if not self.is_generating:
+                        self.processing = False
+                        return
+                        
                     # 提取音频元数据
                     title, artist, duration = self.extract_audio_info(music_file)
                     total_duration += duration
