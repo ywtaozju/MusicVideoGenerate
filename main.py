@@ -63,6 +63,11 @@ class MusicVideoGenerator:
         self.is_generating = False  # 添加标志跟踪是否正在生成视频
         self.ffmpeg_process = None  # 添加变量存储FFmpeg进程
         
+        # 添加字体大小设置
+        self.title_font_size = tk.IntVar(value=28)  # 标题字体大小
+        self.lyrics_font_size = tk.IntVar(value=24)  # 歌词字体大小
+        self.playlist_font_size = tk.IntVar(value=24)  # 播放列表字体大小
+        
         # 添加用于跟踪处理时间的变量
         self.start_time = 0
         self.elapsed_time = 0
@@ -336,6 +341,31 @@ class MusicVideoGenerator:
         # 如果系统不支持GPU加速，禁用该选项
         if not self.use_gpu:
             gpu_check.config(state=tk.DISABLED)
+            
+        # 添加字体大小设置
+        font_size_frame = tk.LabelFrame(options_frame, text="字体大小设置", bg="#f0f0f0", padx=10, pady=5)
+        font_size_frame.pack(fill=tk.X, padx=10, pady=5, anchor=tk.W)
+        
+        # 标题字体大小设置
+        title_font_frame = tk.Frame(font_size_frame, bg="#f0f0f0")
+        title_font_frame.pack(fill=tk.X, pady=2)
+        tk.Label(title_font_frame, text="标题字体大小:", bg="#f0f0f0", width=15, anchor=tk.W).pack(side=tk.LEFT)
+        title_font_spinbox = tk.Spinbox(title_font_frame, from_=12, to=48, textvariable=self.title_font_size, width=5)
+        title_font_spinbox.pack(side=tk.LEFT, padx=5)
+        
+        # 播放列表字体大小设置
+        playlist_font_frame = tk.Frame(font_size_frame, bg="#f0f0f0")
+        playlist_font_frame.pack(fill=tk.X, pady=2)
+        tk.Label(playlist_font_frame, text="播放列表字体大小:", bg="#f0f0f0", width=15, anchor=tk.W).pack(side=tk.LEFT)
+        playlist_font_spinbox = tk.Spinbox(playlist_font_frame, from_=12, to=48, textvariable=self.playlist_font_size, width=5)
+        playlist_font_spinbox.pack(side=tk.LEFT, padx=5)
+        
+        # 歌词字体大小设置
+        lyrics_font_frame = tk.Frame(font_size_frame, bg="#f0f0f0")
+        lyrics_font_frame.pack(fill=tk.X, pady=2)
+        tk.Label(lyrics_font_frame, text="歌词字体大小:", bg="#f0f0f0", width=15, anchor=tk.W).pack(side=tk.LEFT)
+        lyrics_font_spinbox = tk.Spinbox(lyrics_font_frame, from_=12, to=48, textvariable=self.lyrics_font_size, width=5)
+        lyrics_font_spinbox.pack(side=tk.LEFT, padx=5)
             
         # 进度条
         progress_frame = tk.Frame(self.content_frame, bg="#f0f0f0")
@@ -1641,73 +1671,88 @@ class MusicVideoGenerator:
                     time_font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
                 
                 if os.path.exists(title_font_path) and os.path.exists(time_font_path):
-                    title_font = ImageFont.truetype(title_font_path, 28)
-                    time_font = ImageFont.truetype(time_font_path, 24)
+                    # 使用用户设置的字体大小
+                    title_font_size = self.title_font_size.get()
+                    playlist_font_size = self.playlist_font_size.get()
+                    
+                    title_font = ImageFont.truetype(title_font_path, title_font_size)
+                    playlist_font = ImageFont.truetype(time_font_path, playlist_font_size)
                 else:
                     title_font = ImageFont.load_default()
-                    time_font = ImageFont.load_default()
-            except Exception:
+                    playlist_font = ImageFont.load_default()
+            except Exception as e:
+                print(f"加载字体时出错: {str(e)}")
                 title_font = ImageFont.load_default()
-                time_font = ImageFont.load_default()
+                playlist_font = ImageFont.load_default()
             
             # 为文本添加阴影效果以增强可读性
             shadow_offset = 2
             shadow_color = "black"
             
+            # 调整标题位置，根据字体大小调整
+            title_font_size = self.title_font_size.get()
+            title_y = 30
+            divider_y = title_y + title_font_size + 20  # 分隔线位置随标题字体大小调整
+            
             # 添加标题
             title_text = "歌曲列表"
             # 添加阴影效果
-            draw.text((x_start + shadow_offset, 30 + shadow_offset), title_text, 
+            draw.text((x_start + shadow_offset, title_y + shadow_offset), title_text, 
                     fill=shadow_color, font=title_font)
             # 添加主文本
-            draw.text((x_start, 30), title_text, fill="white", font=title_font)
+            draw.text((x_start, title_y), title_text, fill="white", font=title_font)
             
             # 绘制分隔线 (带阴影)
-            draw.line([(x_start + shadow_offset, 80 + shadow_offset), (img.width - 20 + shadow_offset, 80 + shadow_offset)], 
+            draw.line([(x_start + shadow_offset, divider_y + shadow_offset), (img.width - 20 + shadow_offset, divider_y + shadow_offset)], 
                     fill=shadow_color, width=2)
-            draw.line([(x_start, 80), (img.width - 20, 80)], fill="white", width=2)
+            draw.line([(x_start, divider_y), (img.width - 20, divider_y)], fill="white", width=2)
             
-            # 添加歌曲列表
-            y_position = 120
-            line_height = 60  # 每个歌曲之间的间距
+            # 添加歌曲列表，起始位置也随字体大小调整
+            y_position = divider_y + 40
+            
+            # 计算动态间距，根据字体大小调整
+            font_size = self.playlist_font_size.get()
+            number_width = 40 * (font_size / 24)  # 序号宽度根据字体大小调整
+            time_width = 100 * (font_size / 24)   # 时间宽度根据字体大小调整
+            line_height = max(60, font_size * 2.2)  # 行高随字体大小调整，但至少保持60像素
             
             for i, info in enumerate(music_info):
                 # 歌曲序号 (带阴影)
                 number_text = f"{i+1}."
                 draw.text((x_start + shadow_offset, y_position + shadow_offset), number_text, 
-                       fill=shadow_color, font=title_font)
-                draw.text((x_start, y_position), number_text, fill="white", font=title_font)
+                       fill=shadow_color, font=playlist_font)
+                draw.text((x_start, y_position), number_text, fill="white", font=playlist_font)
                 
                 # 歌曲开始时间 (带阴影)
-                time_x = x_start + 60
+                time_x = x_start + number_width
                 time_text = info['start_time_fmt']
                 draw.text((time_x + shadow_offset, y_position + shadow_offset), time_text, 
-                       fill=shadow_color, font=time_font)
+                       fill=shadow_color, font=playlist_font)
                 draw.text((time_x, y_position), time_text, 
-                       fill="#00FFFF", font=time_font)  # 青色显示时间
+                       fill="#00FFFF", font=playlist_font)  # 青色显示时间
                 
                 # 歌曲名称
-                name_x = x_start + 160
+                name_x = x_start + number_width + time_width
                 # 如果歌曲名称过长，进行裁剪
                 display_name = info['display_name']
                 
                 # 确保歌曲名称不包含文件扩展名
                 display_name = os.path.splitext(display_name)[0]
                 
-                max_width = panel_width - 180  # 留出序号和时间的空间
+                max_width = panel_width - (number_width + time_width + 20)  # 动态计算最大宽度
                 
-                if draw.textlength(display_name, font=title_font) > max_width:
+                if draw.textlength(display_name, font=playlist_font) > max_width:
                     # 裁剪歌曲名称使其适应区域宽度
-                    while draw.textlength(display_name + "...", font=title_font) > max_width and len(display_name) > 1:
+                    while draw.textlength(display_name + "...", font=playlist_font) > max_width and len(display_name) > 1:
                         display_name = display_name[:-1]
                     display_name += "..."
                 
                 # 添加文字阴影效果
                 draw.text((name_x + shadow_offset, y_position + shadow_offset), display_name, 
-                       fill=shadow_color, font=title_font)
+                       fill=shadow_color, font=playlist_font)
                 # 添加主文本
                 draw.text((name_x, y_position), display_name, 
-                       fill="white", font=title_font)
+                       fill="white", font=playlist_font)
                 
                 y_position += line_height
             
@@ -2638,8 +2683,11 @@ class MusicVideoGenerator:
             with open(srt_file, 'r', encoding='utf-8') as f:
                 srt_content = f.read()
             
+            # 获取用户设置的歌词字体大小
+            lyrics_font_size = self.lyrics_font_size.get()
+            
             # 创建ASS头部
-            ass_header = """[Script Info]
+            ass_header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1920
 PlayResY: 1080
@@ -2647,7 +2695,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,24,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,30,1
+Style: Default,Arial,{lyrics_font_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,30,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
