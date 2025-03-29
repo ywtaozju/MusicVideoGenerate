@@ -292,28 +292,28 @@ class MusicVideoGenerator:
         clear_overlay_btn = tk.Button(overlay_right_frame, text="清除图片", command=self.clear_overlay, bg="#F44336", fg="white", font=("Arial", 10), width=15)
         clear_overlay_btn.pack(side=tk.RIGHT, padx=5)
         
-        # 添加预览歌单背景的框架
-        preview_frame = tk.LabelFrame(self.content_frame, text="歌单背景预览", bg="#f0f0f0", font=("Arial", 12))
-        preview_frame.pack(fill=tk.X, padx=10, pady=10)
+        # # 添加预览歌单背景的框架
+        # preview_frame = tk.LabelFrame(self.content_frame, text="歌单背景预览", bg="#f0f0f0", font=("Arial", 12))
+        # preview_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        # 创建左侧预览图片区域
-        preview_left_frame = tk.Frame(preview_frame, bg="#f0f0f0")
-        preview_left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # # 创建左侧预览图片区域
+        # preview_left_frame = tk.Frame(preview_frame, bg="#f0f0f0")
+        # preview_left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # 创建预览图片标签
-        self.preview_image_label = tk.Label(preview_left_frame, text="点击预览按钮生成歌单背景预览", 
-                                          bg="#f0f0f0", anchor=tk.CENTER, justify=tk.CENTER, 
-                                          padx=10, pady=10, wraplength=600)
-        self.preview_image_label.pack(fill=tk.BOTH, expand=True)
+        # # 创建预览图片标签
+        # self.preview_image_label = tk.Label(preview_left_frame, text="点击预览按钮生成歌单背景预览", 
+        #                                   bg="#f0f0f0", anchor=tk.CENTER, justify=tk.CENTER, 
+        #                                   padx=10, pady=10, wraplength=600)
+        # self.preview_image_label.pack(fill=tk.BOTH, expand=True)
         
-        # 创建右侧按钮区域
-        preview_right_frame = tk.Frame(preview_frame, bg="#f0f0f0")
-        preview_right_frame.pack(side=tk.RIGHT, padx=10, pady=10)
+        # # 创建右侧按钮区域
+        # preview_right_frame = tk.Frame(preview_frame, bg="#f0f0f0")
+        # preview_right_frame.pack(side=tk.RIGHT, padx=10, pady=10)
         
-        # 添加预览按钮
-        preview_btn = tk.Button(preview_right_frame, text="预览歌单背景", command=self.preview_playlist_image, 
-                             bg="#009688", fg="white", font=("Arial", 10), width=15)
-        preview_btn.pack(side=tk.RIGHT, padx=5)
+        # # 添加预览按钮
+        # preview_btn = tk.Button(preview_right_frame, text="预览歌单背景", command=self.preview_playlist_image, 
+        #                      bg="#009688", fg="white", font=("Arial", 10), width=15)
+        # preview_btn.pack(side=tk.RIGHT, padx=5)
         
         # 选择输出目录和文件名
         output_frame = tk.LabelFrame(self.content_frame, text="选择输出位置", bg="#f0f0f0", font=("Arial", 12))
