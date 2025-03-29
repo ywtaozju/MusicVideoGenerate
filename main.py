@@ -35,6 +35,7 @@ except ImportError:
 
 import queue
 import time
+import shutil
 
 class MusicVideoGenerator:
     def __init__(self, root):
@@ -62,6 +63,9 @@ class MusicVideoGenerator:
         self.use_gpu = False    # 是否使用GPU加速
         self.is_generating = False  # 添加标志跟踪是否正在生成视频
         self.ffmpeg_process = None  # 添加变量存储FFmpeg进程
+        
+        # 添加字体文件路径设置
+        self.custom_font_path = ""  # 自定义字体文件路径
         
         # 添加字体大小设置
         self.title_font_size = tk.IntVar(value=28)  # 标题字体大小
@@ -366,6 +370,20 @@ class MusicVideoGenerator:
         tk.Label(lyrics_font_frame, text="歌词字体大小:", bg="#f0f0f0", width=15, anchor=tk.W).pack(side=tk.LEFT)
         lyrics_font_spinbox = tk.Spinbox(lyrics_font_frame, from_=12, to=48, textvariable=self.lyrics_font_size, width=5)
         lyrics_font_spinbox.pack(side=tk.LEFT, padx=5)
+        
+        # 添加字体文件选择
+        font_file_frame = tk.Frame(font_size_frame, bg="#f0f0f0")
+        font_file_frame.pack(fill=tk.X, pady=2)
+        tk.Label(font_file_frame, text="自定义字体文件:", bg="#f0f0f0", width=15, anchor=tk.W).pack(side=tk.LEFT)
+        
+        self.font_path_label = tk.Label(font_file_frame, text="未选择", bg="#f0f0f0", width=25, anchor=tk.W)
+        self.font_path_label.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        
+        select_font_btn = tk.Button(font_file_frame, text="选择字体", command=self.select_font, bg="#2196F3", fg="white", font=("Arial", 9))
+        select_font_btn.pack(side=tk.LEFT, padx=5)
+        
+        clear_font_btn = tk.Button(font_file_frame, text="清除", command=self.clear_font, bg="#f44336", fg="white", font=("Arial", 9))
+        clear_font_btn.pack(side=tk.LEFT, padx=5)
             
         # 进度条
         progress_frame = tk.Frame(self.content_frame, bg="#f0f0f0")
@@ -1700,13 +1718,21 @@ class MusicVideoGenerator:
             
             # 加载字体
             try:
-                if os.name == 'nt':  # Windows
-                    title_font_path = "C:\\Windows\\Fonts\\simhei.ttf"  # 黑体
-                    time_font_path = "C:\\Windows\\Fonts\\simhei.ttf"   # 黑体
-                else:  # Linux/Mac
-                    title_font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-                    time_font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+                # 优先使用自定义字体
+                if self.custom_font_path and os.path.exists(self.custom_font_path):
+                    # 使用用户指定的字体
+                    title_font_path = self.custom_font_path
+                    time_font_path = self.custom_font_path
+                else:
+                    # 使用系统默认字体
+                    if os.name == 'nt':  # Windows
+                        title_font_path = "C:\\Windows\\Fonts\\simhei.ttf"  # 黑体
+                        time_font_path = "C:\\Windows\\Fonts\\simhei.ttf"   # 黑体
+                    else:  # Linux/Mac
+                        title_font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+                        time_font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
                 
+                # 加载字体
                 if os.path.exists(title_font_path) and os.path.exists(time_font_path):
                     # 使用用户设置的字体大小
                     title_font_size = self.title_font_size.get()
@@ -2243,6 +2269,25 @@ class MusicVideoGenerator:
         
         # 更新UI状态
         self.status_label.config(text="已清空所有歌曲")
+        
+    def select_font(self):
+        """选择自定义字体文件"""
+        font_file = filedialog.askopenfilename(
+            title="选择字体文件",
+            filetypes=[("字体文件", "*.ttf *.otf"), ("TrueType字体", "*.ttf"), ("OpenType字体", "*.otf"), ("所有文件", "*.*")]
+        )
+        if font_file:
+            self.custom_font_path = font_file
+            # 显示文件名而不是完整路径
+            font_name = os.path.basename(font_file)
+            self.font_path_label.config(text=font_name)
+            messagebox.showinfo("成功", f"已选择字体文件: {font_name}")
+    
+    def clear_font(self):
+        """清除自定义字体设置"""
+        self.custom_font_path = ""
+        self.font_path_label.config(text="未选择")
+        messagebox.showinfo("提示", "已清除自定义字体设置，将使用系统默认字体")
 
 if __name__ == "__main__":
     root = tk.Tk()
