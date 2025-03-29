@@ -15,6 +15,7 @@ import urllib.request
 import urllib.parse
 import urllib.error
 import html
+from fontTools.ttLib import TTFont
 from io import BytesIO
 # 导入mutagen库用于读取MP3的ID3标签
 try:
@@ -1336,13 +1337,35 @@ class MusicVideoGenerator:
                             # 获取用户设置的字体大小
                             font_size = self.lyrics_font_size.get()
                             
+                            # 如果用户选择了自定义字体，将其复制到临时目录
+                            font_name = "default"
+                            if self.custom_font_path and os.path.exists(self.custom_font_path):
+                                # 获取字体文件名
+                                font_file_name = os.path.basename(self.custom_font_path)
+                                font_name = self.get_font_name(self.custom_font_path)
+                                # 复制字体文件到临时目录
+                                print(f"复制字体文件 {self.custom_font_path} 到临时目录")
+                                shutil.copy2(self.custom_font_path, os.path.join(temp_dir, font_file_name))
+                            
                             # 使用相对路径
                             sub_command = [
                                 'ffmpeg',
                                 '-loop', '1',
                                 '-i', img_with_playlist,
                                 '-i', temp_audio,
-                                '-vf', f'subtitles=lyrics.srt:force_style=\'FontSize={font_size}\'',
+                            ]
+                            
+                            # 设置字幕滤镜参数，使用临时目录中的字体
+                            subtitle_filter = f'subtitles=lyrics.srt:fontsdir=.:force_style=\'FontSize={font_size}'
+                            # 如果有自定义字体，设置FontName
+                            if self.custom_font_path and os.path.exists(self.custom_font_path):
+                                subtitle_filter += f',FontName={font_name}\''
+                            else:
+                                subtitle_filter += '\''
+                            
+                            # 添加字幕滤镜参数
+                            sub_command.extend([
+                                '-vf', subtitle_filter,
                                 '-c:v', 'h264_nvenc' if self.gpu_acceleration_var.get() and self.use_gpu else 'libx264',
                                 '-preset', 'p7' if self.gpu_acceleration_var.get() and self.use_gpu else 'medium',
                                 '-crf', '23',
@@ -1352,7 +1375,7 @@ class MusicVideoGenerator:
                                 '-shortest',
                                 '-y',
                                 temp_video_with_sub
-                            ]
+                            ])
                             
                             print(f"执行创建带字幕的临时视频命令: {' '.join(sub_command)}")
                             
@@ -1429,8 +1452,26 @@ class MusicVideoGenerator:
                         if subtitle_file and os.path.exists(subtitle_file) and os.name != 'nt':
                             # 添加字体大小设置
                             font_size = self.lyrics_font_size.get()
+                            
+                            # 如果用户选择了自定义字体，将其复制到临时目录
+                            font_name = ""
+                            if self.custom_font_path and os.path.exists(self.custom_font_path):
+                                # 获取字体文件名
+                                font_file_name = os.path.basename(self.custom_font_path)
+                                font_name = self.get_font_name(self.custom_font_path)
+                                # 复制字体文件到临时目录
+                                print(f"复制字体文件 {self.custom_font_path} 到临时目录")
+                                shutil.copy2(self.custom_font_path, os.path.join(temp_dir, font_file_name))
+                                
+                                # 设置字幕滤镜参数，使用当前目录字体
+                                subtitle_filter = f"subtitles='{subtitle_file}':fontsdir='{temp_dir}':force_style='FontSize={font_size},FontName={font_name}'"
+                            else:
+                                # 使用系统默认字体目录
+                                font_dir = "/usr/share/fonts/truetype" if os.name != 'nt' else "C:/Windows/Fonts"
+                                subtitle_filter = f"subtitles='{subtitle_file}':fontsdir='{font_dir}':force_style='FontSize={font_size}'"
+                            
                             video_command.extend([
-                                '-vf', f"subtitles='{subtitle_file}':force_style='FontSize={font_size}'"
+                                '-vf', subtitle_filter
                             ])
                         
                         # 添加临时输出文件
@@ -2433,6 +2474,30 @@ class MusicVideoGenerator:
             messagebox.showerror("错误", error_message)
             print(error_message)
             traceback.print_exc()
+
+    def get_font_name(self, ttf_path):
+        try:
+            font = TTFont(ttf_path)
+            name_table = font['name']
+
+            # 优先查找名称ID为4（完整字体名），平台为Windows（3），编码为Unicode（1）
+            for entry in name_table.names:
+                if entry.nameID == 4:
+                    # Windows平台（Unicode编码）
+                    if entry.platformID == 3 and entry.platEncID == 1:
+                        return entry.string.decode('utf-16be', errors='ignore')
+                    # Mac平台或其他情况
+                    elif entry.platformID == 1:
+                        return entry.string.decode('mac_roman', errors='ignore')
+
+            # 若未找到，返回第一个名称ID为4的条目
+            for entry in name_table.names:
+                if entry.nameID == 4:
+                    return entry.string.decode(errors='ignore')
+
+            return "未找到字体名称"
+        except Exception as e:
+            return f"读取字体文件出错：{e}"
 
 if __name__ == "__main__":
     root = tk.Tk()
