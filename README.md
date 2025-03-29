@@ -46,6 +46,28 @@
 3. 脚本将为您创建名为"music-video-gen"的环境，并安装所有必要的依赖项
 4. 创建环境后，脚本会检查FFmpeg是否已安装，如果没有安装，您需要手动安装
 
+## 优化环境
+
+为了减小打包的exe文件体积，可以使用优化后的conda环境：
+
+```bash
+# 安装精简环境
+conda env create -f environment.yml
+
+# 激活环境
+conda activate music-video-min
+
+# 运行程序
+python main.py
+```
+
+精简环境仅包含必要的依赖：
+- Pillow: 图像处理
+- mutagen: 音频元数据处理
+- fonttools: 字体解析
+- eyed3: MP3标签处理备选库
+- pyinstaller: 用于打包为可执行文件
+
 ## 使用方法
 
 1. 如果使用conda环境，首先激活环境：

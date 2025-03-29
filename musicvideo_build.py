@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-PyInstaller打包脚本 - 歌单视频生成器 (Conda环境版)
+PyInstaller打包脚本 - 歌单视频生成器 (优化版)
 """
 
 import os
@@ -12,7 +12,7 @@ import sys
 import platform
 
 def create_exe():
-    print("开始创建歌单视频生成器的可执行文件 (使用Conda环境)...")
+    print("开始创建歌单视频生成器的可执行文件 (精简版)...")
     
     # 检查是否在conda环境中
     in_conda = os.environ.get('CONDA_PREFIX') is not None
@@ -35,12 +35,6 @@ def create_exe():
     print("安装必要的依赖...")
     subprocess.call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
     
-    # 添加缺少的依赖（如果requirements.txt中没有）
-    missing_deps = ["mutagen", "eyed3"]
-    for dep in missing_deps:
-        print(f"安装依赖: {dep}")
-        subprocess.call([sys.executable, "-m", "pip", "install", dep])
-    
     # 获取conda环境路径，添加到pathex中
     conda_prefix = os.environ.get('CONDA_PREFIX', '')
     pathex = []
@@ -56,7 +50,7 @@ def create_exe():
             pathex.append(site_packages)
             print(f"添加conda环境路径: {site_packages}")
     
-    # 首先创建runtime_hook来处理ffmpeg的控制台窗口问题
+    # 创建runtime_hook来处理ffmpeg的控制台窗口问题
     os.makedirs("hooks", exist_ok=True)
     hook_content = """
 # hook用于隐藏子进程的控制台窗口
@@ -84,7 +78,7 @@ if sys.platform == 'win32':
     with open("hooks/subprocess_hook.py", "w", encoding="utf-8") as f:
         f.write(hook_content)
     
-    # 创建临时spec文件
+    # 创建spec文件
     spec_content = f"""# -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
@@ -94,11 +88,11 @@ a = Analysis(
     pathex={pathex},
     binaries=[],
     datas=[],
-    hiddenimports=['PIL._tkinter_finder', 'mutagen.id3', 'mutagen.mp3', 'mutagen.flac', 'mutagen.wave', 'mutagen.asf', 'mutagen.mp4', 'eyed3'],
+    hiddenimports=['mutagen.id3', 'mutagen.mp3', 'mutagen.flac', 'mutagen.wave', 'mutagen.asf', 'mutagen.mp4', 'eyed3'],
     hookspath=['hooks'],
     hooksconfig={{}},
     runtime_hooks=['hooks/subprocess_hook.py'],
-    excludes=[],
+    excludes=['numpy', 'opencv', 'matplotlib', 'scipy', 'pandas', 'PyQt5', 'PyQt6', 'wx'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -108,12 +102,7 @@ a = Analysis(
 # 添加资源文件和依赖模块
 a.datas += [
     ('check_ffmpeg.py', 'check_ffmpeg.py', 'DATA'),
-    ('lrc_parser.py', 'lrc_parser.py', 'DATA'),
-    ('add_lyrics.py', 'add_lyrics.py', 'DATA'),
 ]
-
-# 如果有自定义图标，可以添加
-# a.datas += [('icon.ico', 'icon.ico', 'DATA')]
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
@@ -137,7 +126,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # 如果有自定义图标，可以设置为'icon.ico'
+    icon=None,
 )
 """
     
@@ -157,7 +146,7 @@ exe = EXE(
         subprocess.call(["pyinstaller", "musicvideo.spec", "--clean"])
     
     # 复制必要的资源文件夹到dist目录
-    resource_folders = ["lyrics", "music", "bg", "bg1", "output"]
+    resource_folders = ["lyrics", "music", "bg", "output"]
     for folder in resource_folders:
         if os.path.exists(folder):
             target_folder = os.path.join("dist", "歌单视频生成器", folder)
@@ -167,6 +156,7 @@ exe = EXE(
     print("\n构建完成!")
     print("可执行文件已创建在 dist/歌单视频生成器 目录中")
     print("注意: 您仍然需要确保安装了FFmpeg并添加到系统PATH中才能正常使用程序")
+    print("此打包版本已优化，大小显著减小")
 
 if __name__ == "__main__":
     create_exe() 

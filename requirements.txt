@@ -1,4 +1,10 @@
-pillow==9.5.0
-pyinstaller>=5.9.0
-mutagen>=1.45.1
-eyed3>=0.9.6 
+# 核心依赖
+Pillow>=9.0.0       # 图像处理，用于创建封面和视频帧
+mutagen>=1.45.0     # 音频元数据处理 (MP3, FLAC, WAV, WMA, MP4)
+fonttools>=4.33.3   # 字体文件解析和处理
+
+# 次要依赖 
+eyed3>=0.9.6        # MP3标签解析的备用库
+
+# 注意事项
+# 本程序需要FFmpeg安装并添加到系统PATH中 

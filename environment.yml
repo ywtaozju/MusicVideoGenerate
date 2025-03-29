@@ -1,10 +1,13 @@
-name: music-video-gen
+name: music-video-min
 channels:
   - defaults
   - conda-forge
 dependencies:
   - python=3.8
-  - pip=21.0
-  - tk
+  - pip
   - pip:
-    - pillow>=9.0.0 
+    - pillow>=9.0.0
+    - mutagen>=1.45.0
+    - fonttools>=4.33.3
+    - eyed3>=0.9.6
+    - pyinstaller>=6.0.0 
