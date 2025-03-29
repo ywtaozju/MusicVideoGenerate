@@ -1694,9 +1694,9 @@ class MusicVideoGenerator:
             # 创建绘图对象
             draw = ImageDraw.Draw(img)
             
-            # 右侧区域的宽度和位置
-            panel_width = 500  # 右侧区域宽度
-            x_start = img.width - panel_width + 20
+            # 左侧区域的宽度和位置
+            panel_width = 1800  # 增加到接近视频宽度(1920)，留出一些边距
+            x_start = 20  # 从左侧开始
             
             # 加载字体
             try:
@@ -1740,9 +1740,9 @@ class MusicVideoGenerator:
             draw.text((x_start, title_y), title_text, fill="white", font=title_font)
             
             # 绘制分隔线 (带阴影)
-            draw.line([(x_start + shadow_offset, divider_y + shadow_offset), (img.width - 20 + shadow_offset, divider_y + shadow_offset)], 
+            draw.line([(x_start + shadow_offset, divider_y + shadow_offset), (x_start + panel_width + shadow_offset, divider_y + shadow_offset)], 
                     fill=shadow_color, width=2)
-            draw.line([(x_start, divider_y), (img.width - 20, divider_y)], fill="white", width=2)
+            draw.line([(x_start, divider_y), (x_start + panel_width, divider_y)], fill="white", width=2)
             
             # 添加歌曲列表，起始位置也随字体大小调整
             y_position = divider_y + 40
@@ -1751,7 +1751,7 @@ class MusicVideoGenerator:
             font_size = self.playlist_font_size.get()
             number_width = 40 * (font_size / 24)  # 序号宽度根据字体大小调整
             time_width = 100 * (font_size / 24)   # 时间宽度根据字体大小调整
-            line_height = max(60, font_size * 2.2)  # 行高随字体大小调整，但至少保持60像素
+            line_height = max(40, font_size * 1.6)  # 减小行高，但保持最小高度为40像素
             
             for i, info in enumerate(music_info):
                 # 歌曲序号 (带阴影)
