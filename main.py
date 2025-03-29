@@ -36,6 +36,7 @@ except ImportError:
 import queue
 import time
 import shutil
+import traceback
 
 class MusicVideoGenerator:
     def __init__(self, root):
@@ -289,6 +290,29 @@ class MusicVideoGenerator:
         # 添加清除按钮
         clear_overlay_btn = tk.Button(overlay_right_frame, text="清除图片", command=self.clear_overlay, bg="#F44336", fg="white", font=("Arial", 10), width=15)
         clear_overlay_btn.pack(side=tk.RIGHT, padx=5)
+        
+        # 添加预览歌单背景的框架
+        preview_frame = tk.LabelFrame(self.content_frame, text="歌单背景预览", bg="#f0f0f0", font=("Arial", 12))
+        preview_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # 创建左侧预览图片区域
+        preview_left_frame = tk.Frame(preview_frame, bg="#f0f0f0")
+        preview_left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # 创建预览图片标签
+        self.preview_image_label = tk.Label(preview_left_frame, text="点击预览按钮生成歌单背景预览", 
+                                          bg="#f0f0f0", anchor=tk.CENTER, justify=tk.CENTER, 
+                                          padx=10, pady=10, wraplength=600)
+        self.preview_image_label.pack(fill=tk.BOTH, expand=True)
+        
+        # 创建右侧按钮区域
+        preview_right_frame = tk.Frame(preview_frame, bg="#f0f0f0")
+        preview_right_frame.pack(side=tk.RIGHT, padx=10, pady=10)
+        
+        # 添加预览按钮
+        preview_btn = tk.Button(preview_right_frame, text="预览歌单背景", command=self.preview_playlist_image, 
+                             bg="#009688", fg="white", font=("Arial", 10), width=15)
+        preview_btn.pack(side=tk.RIGHT, padx=5)
         
         # 选择输出目录和文件名
         output_frame = tk.LabelFrame(self.content_frame, text="选择输出位置", bg="#f0f0f0", font=("Arial", 12))
@@ -2288,6 +2312,127 @@ class MusicVideoGenerator:
         self.custom_font_path = ""
         self.font_path_label.config(text="未选择")
         messagebox.showinfo("提示", "已清除自定义字体设置，将使用系统默认字体")
+        
+    def preview_playlist_image(self):
+        """预览包含歌单的背景图片"""
+        try:
+            # 检查是否有选择背景图片
+            if not self.image_file:
+                messagebox.showwarning("警告", "请先选择背景图片文件夹")
+                return
+                
+            # 检查是否有添加音乐
+            if not self.music_files:
+                messagebox.showwarning("警告", "请先添加音乐文件")
+                return
+                
+            # 创建临时目录用于存储预览图片
+            temp_dir = tempfile.mkdtemp()
+            preview_image_path = os.path.join(temp_dir, "preview_playlist.png")
+            
+            # 分析音乐文件
+            music_info = []
+            current_time = 0
+            
+            for i, music_file in enumerate(self.music_files):
+                # 获取音频信息 - extract_audio_info返回(title, artist, duration)元组
+                title, artist, duration = self.extract_audio_info(music_file)
+                
+                # 检查是否存在歌词
+                has_lyrics = self.has_lyrics(music_file)
+                
+                # 格式化开始时间
+                start_time_fmt = self.format_time(current_time)
+                
+                # 获取显示名称
+                file_name = os.path.basename(music_file)
+                display_name = file_name
+                
+                # 使用更好的显示名称（标题+艺术家）
+                if artist:
+                    display_name = f"{artist} - {title}"
+                else:
+                    display_name = title
+                
+                # 确保display_name不包含文件扩展名
+                display_name = os.path.splitext(display_name)[0]
+                
+                # 获取歌词路径
+                lyrics_path = ""
+                if has_lyrics:
+                    base_name = os.path.splitext(music_file)[0]
+                    lrc_file = base_name + '.lrc'
+                    if os.path.exists(lrc_file):
+                        lyrics_path = lrc_file
+                    elif self.lyrics_folder and os.path.exists(self.lyrics_folder):
+                        # 在歌词文件夹中查找
+                        audio_filename = os.path.basename(music_file)
+                        filename_no_ext = os.path.splitext(audio_filename)[0]
+                        possible_names = [
+                            f"{filename_no_ext}.lrc",
+                            f"{filename_no_ext}.LRC"
+                        ]
+                        
+                        if '-' in filename_no_ext:
+                            artist_name, song_title = filename_no_ext.split('-', 1)
+                            artist_name = artist_name.strip()
+                            song_title = song_title.strip()
+                            possible_names.extend([
+                                f"{artist_name} - {song_title}.lrc",
+                                f"{song_title}.lrc",
+                                f"{artist_name}-{song_title}.lrc"
+                            ])
+                        
+                        for lrc_name in possible_names:
+                            lrc_path = os.path.join(self.lyrics_folder, lrc_name)
+                            if os.path.exists(lrc_path):
+                                lyrics_path = lrc_path
+                                break
+                
+                # 添加到音乐信息列表
+                music_info.append({
+                    'file': music_file,
+                    'title': title,
+                    'artist': artist,
+                    'duration': duration,
+                    'start_time': current_time,
+                    'start_time_fmt': start_time_fmt,
+                    'display_name': display_name,
+                    'has_lyrics': has_lyrics,
+                    'lyrics_path': lyrics_path
+                })
+                
+                current_time += duration
+            
+            # 创建并保存预览图片
+            self.create_image_with_playlist(music_info, preview_image_path)
+            
+            # 在UI中显示预览图片
+            img = Image.open(preview_image_path)
+            # 调整图片大小以适应UI
+            preview_width = 600
+            ratio = img.width / preview_width
+            preview_height = int(img.height / ratio)
+            img = img.resize((preview_width, preview_height), Image.LANCZOS)
+            
+            # 转换为Tkinter可用格式
+            photo = ImageTk.PhotoImage(img)
+            
+            # 更新标签显示图片
+            self.preview_image_label.config(image=photo)
+            self.preview_image_label.image = photo  # 保持引用，防止垃圾回收
+            
+            # 清理临时文件
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            
+            # 显示成功消息
+            messagebox.showinfo("成功", "歌单背景预览生成完成")
+            
+        except Exception as e:
+            error_message = f"预览生成失败: {str(e)}"
+            messagebox.showerror("错误", error_message)
+            print(error_message)
+            traceback.print_exc()
 
 if __name__ == "__main__":
     root = tk.Tk()
